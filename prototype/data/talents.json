@@ -1,0 +1,8 @@
+[
+  {"name": "【占位】竞赛大神", "desc": "智力 +2，竞赛类事件更容易出现", "effects": {"智力": 2}, "shuyuan": "", "boost": {"竞赛": 3}},
+  {"name": "【占位】体育特长生", "desc": "体质 +3", "effects": {"体质": 3}, "shuyuan": "", "boost": {}},
+  {"name": "【占位】家境优渥", "desc": "家境 +3", "effects": {"家境": 3}, "shuyuan": "", "boost": {}},
+  {"name": "【占位】睿信土著", "desc": "直接指定睿信书院，智力 +1", "effects": {"智力": 1}, "shuyuan": "睿信", "boost": {}},
+  {"name": "【占位】社交达人", "desc": "颜值 +2", "effects": {"颜值": 2}, "shuyuan": "", "boost": {}},
+  {"name": "【占位】熬夜冠军", "desc": "智力 +1，体质 -1", "effects": {"智力": 1, "体质": -1}, "shuyuan": "", "boost": {}}
+]

@@ -1,0 +1,15 @@
+[
+  {"text": "【占位】军训第一天，站军姿站到腿发抖。", "type": "特殊", "stage": "军训", "need": {}, "shuyuan": [], "major": [], "effects": {"体质": 0.5}, "tags": []},
+  {"text": "【占位】期末周，图书馆的位置比宿舍床还难抢。", "type": "特殊", "stage": "期末", "need": {}, "shuyuan": [], "major": [], "effects": {"智力": 0.5}, "tags": ["保研"]},
+  {"text": "【占位】期末考试，你连熬三个通宵。", "type": "特殊", "stage": "期末", "need": {}, "shuyuan": [], "major": [], "effects": {"智力": 0.5, "体质": -0.5}, "tags": []},
+  {"text": "【占位】寒假回家，家里给你塞了两千块。", "type": "特殊", "stage": "寒暑假", "need": {}, "shuyuan": [], "major": [], "effects": {"家境": 0.5}, "tags": []},
+  {"text": "【占位】暑假留校，你在实验室泡了一个月。", "type": "特殊", "stage": "寒暑假", "need": {}, "shuyuan": [], "major": [], "effects": {"智力": 0.5}, "tags": ["保研"]},
+  {"text": "【占位】大四实习第一天，你被安排去整理表格。", "type": "特殊", "stage": "实习", "need": {}, "shuyuan": [], "major": [], "effects": {"颜值": 0.5}, "tags": ["进大厂"]},
+  {"text": "【占位】实习期加班到末班车，你开始怀疑人生。", "type": "特殊", "stage": "实习", "need": {}, "shuyuan": [], "major": [], "effects": {"体质": -0.5, "家境": 0.5}, "tags": ["进大厂"]},
+  {"text": "【占位】毕业论文答辩，你在台上讲得满头大汗。", "type": "特殊", "stage": "答辩", "need": {}, "shuyuan": [], "major": [], "effects": {"智力": 0.5}, "tags": []},
+  {"text": "【占位】你在食堂三楼发现了新窗口。", "type": "通用", "stage": "常规", "need": {}, "shuyuan": [], "major": [], "effects": {"体质": 0.5}, "tags": []},
+  {"text": "【占位】室友拉你一起打球。", "type": "通用", "stage": "常规", "need": {}, "shuyuan": [], "major": [], "effects": {"体质": 0.5, "颜值": 0.5}, "tags": []},
+  {"text": "【占位】你报名了数学建模竞赛。", "type": "通用", "stage": "常规", "need": {"智力": 6}, "shuyuan": [], "major": [], "effects": {"智力": 0.5}, "tags": ["保研", "竞赛"]},
+  {"text": "【占位】社团招新，你被拉去当干事。", "type": "通用", "stage": "常规", "need": {}, "shuyuan": [], "major": [], "effects": {"颜值": 0.5}, "tags": ["进编制"]},
+  {"text": "【占位】你在宿舍楼下的自习室坐到关门。", "type": "通用", "stage": "常规", "need": {}, "shuyuan": [], "major": [], "effects": {"智力": 0.5, "体质": -0.5}, "tags": []}
+]
