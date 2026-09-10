@@ -26,7 +26,7 @@ WHITE = (255, 255, 255)
 BG_END = (198, 222, 208)
 LINE = (227, 231, 238)
 TEXT = (29, 33, 41)
-TEXT_DIM = (107, 114, 128)
+TEXT_DIM = (84, 92, 106)
 GREEN = (27, 152, 73)
 GREEN_DARK = (14, 122, 56)
 GREEN_LIGHT = (232, 244, 236)
@@ -34,10 +34,15 @@ BROWN = (161, 62, 11)
 BROWN_LIGHT = (251, 240, 234)
 DARK_GREEN = (0, 91, 48)
 
+# 天赋等级配色（见 talent.md）
+TIER_COLORS = {"蓝": (58, 118, 208), "紫": (128, 82, 198), "金": (198, 148, 24)}
+TIER_NAMES = {"蓝": "稀有", "紫": "史诗", "金": "传说"}
+
 FONT_PATH = "C:/Windows/Fonts/msyh.ttc"
 PIXEL_FONT = "fonts/zpix.ttf"   # 开源像素字体 Zpix（OFL）
-LOG_TOP = 205
-LOG_HEIGHT = 610
+EMOJI_FONT = "C:/Windows/Fonts/seguiemj.ttf"   # 主字体缺字时的回退（如「特立✌」的 ✌）
+LOG_TOP = 284
+LOG_HEIGHT = 556
 
 pygame.init()
 screen = pygame.display.set_mode((BASE_W, BASE_H), pygame.RESIZABLE)
@@ -51,11 +56,15 @@ font_cache = {}
 bg_surface = None
 bg_size = None
 round_gradient_cache = {}
+log_panel_cache = {}
 
 # 游戏状态
 scene = "首页"
 player = None
 boosts = {}
+forces = []
+rewind_rate = 0
+rewind_used = False
 talent_choices = []
 chosen = []
 attr_edit = {"智力": 0, "体质": 0, "颜值": 0, "家境": 0}
@@ -116,8 +125,8 @@ def get_font(size, path=FONT_PATH):
 
 
 def text_width(text, size, path=FONT_PATH):
-    """按基准坐标返回文字宽度"""
-    return get_font(size, path).size(text)[0] / scale
+    """按基准坐标返回文字宽度（含符号回退）"""
+    return text_px_width(text, size, path) / scale
 
 
 def mix(color_a, color_b, t):
@@ -157,15 +166,64 @@ def draw_background():
     screen.blit(bg_surface, (0, 0))
 
 
+def has_symbol(text):
+    """判断文字里是否含有主字体会渲染成方框的符号"""
+    for ch in text:
+        code = ord(ch)
+        if 0x2600 <= code <= 0x27BF or 0x1F300 <= code <= 0x1FAFF:
+            return True
+    return False
+
+
+def split_runs(text):
+    """把文字按「是否符号」切段，返回 [[文字, 是否符号]]"""
+    runs = []
+    for ch in text:
+        symbol = has_symbol(ch)
+        if len(runs) > 0 and runs[-1][1] == symbol:
+            runs[-1][0] = runs[-1][0] + ch
+        else:
+            runs.append([ch, symbol])
+    return runs
+
+
+def text_px_width(text, size, path=FONT_PATH, smooth=True):
+    """按像素计算文字宽度；符号段用 emoji 字体"""
+    width = 0
+    for run, symbol in split_runs(text):
+        if symbol:
+            width = width + get_font(size, EMOJI_FONT).size(run)[0]
+        else:
+            width = width + get_font(size, path).size(run)[0]
+    return width
+
+
+def draw_text_px(text, px, py, size, color=TEXT, path=FONT_PATH, smooth=True):
+    """在像素坐标处画一行字；符号段自动换 emoji 字体"""
+    x = px
+    for run, symbol in split_runs(text):
+        if symbol:
+            label = get_font(size, EMOJI_FONT).render(run, True, color)
+        else:
+            label = get_font(size, path).render(run, smooth, color)
+        screen.blit(label, (x, py))
+        x = x + label.get_width()
+
+
 def draw_text(text, x, y, size, color=TEXT, path=FONT_PATH, smooth=True):
     """在基准坐标处画一行字"""
-    screen.blit(get_font(size, path).render(text, smooth, color), (X(x), Y(y)))
+    draw_text_px(text, X(x), Y(y), size, color, path, smooth)
 
 
 def draw_text_center(text, y, size, color=TEXT, path=FONT_PATH, smooth=True):
     """在基准坐标的水平居中位置画一行字"""
-    label = get_font(size, path).render(text, smooth, color)
-    screen.blit(label, (X(BASE_W // 2) - label.get_width() // 2, Y(y)))
+    px = X(BASE_W // 2) - text_px_width(text, size, path, smooth) // 2
+    draw_text_px(text, px, Y(y), size, color, path, smooth)
+
+
+def draw_text_right(text, x_right, y, size, color=TEXT_DIM):
+    """在基准坐标 (x_right, y) 处右对齐画一行字"""
+    draw_text_px(text, X(x_right) - text_px_width(text, size), Y(y), size, color)
 
 
 def draw_title(text, x, y, size):
@@ -187,8 +245,8 @@ def wrap_text(text, font, max_width_base):
     return lines
 
 
-def draw_card(rect, selected=False, fill=WHITE):
-    """卡片：圆角 + 描边 + 左侧色条"""
+def draw_card(rect, selected=False, fill=WHITE, bar=GREEN):
+    """卡片：圆角 + 描边 + 左侧色条（色条颜色可指定，用于天赋等级）"""
     x, y, w, h = rect
     box = pygame.Rect(X(x), Y(y), S(w), S(h))
     pygame.draw.rect(screen, fill, box, border_radius=S(16))
@@ -196,7 +254,7 @@ def draw_card(rect, selected=False, fill=WHITE):
         pygame.draw.rect(screen, GREEN, box, width=2, border_radius=S(16))
     else:
         pygame.draw.rect(screen, LINE, box, width=1, border_radius=S(16))
-    pygame.draw.rect(screen, GREEN, (box.x, box.y + S(12), S(4), box.height - S(24)),
+    pygame.draw.rect(screen, bar, (box.x, box.y + S(12), S(4), box.height - S(24)),
                      border_radius=S(2))
 
 
@@ -237,9 +295,12 @@ def start_new_game():
     """回到开局页"""
     global scene, player, boosts, talent_choices, chosen, attr_edit, points_left
     global round_no, shown_time, major_text, ending, auto_on, auto_speed
-    global scroll, log_scroll, log_follow, message
+    global scroll, log_scroll, log_follow, message, forces, rewind_rate, rewind_used
     player = game.player.new_player(game.data.SHUYUAN_LIST)
     boosts = {}
+    forces = []
+    rewind_rate = 0
+    rewind_used = False
     talent_choices = game.player.draw_talents(talents)
     chosen = []
     attr_edit = {"智力": 0, "体质": 0, "颜值": 0, "家境": 0}
@@ -264,6 +325,7 @@ def write_record(ending_name):
         "shuyuan": player["shuyuan"],
         "major": player["major"],
         "ending": ending_name,
+        "talents": [t["name"] for t in chosen],
         "months": player["months"],
     }
     game.records.save_record(records, this_game)
@@ -272,14 +334,23 @@ def write_record(ending_name):
 
 def show_round():
     """推进一个回合"""
-    global round_no, shown_time, major_text, ending, scene, message, log_follow
+    global round_no, shown_time, major_text, ending, scene, message, log_follow, rewind_used
+    if rewind_used is False and rewind_rate > 0 and random.randint(1, 100) <= rewind_rate:
+        rewind_used = True
+        round_no = 1
+        player["major"] = ""
+        player["seen"] = []
+        player["flags"] = []
+        player["months"].append({"time": "大一9月",
+                                 "text": "【天赋·败者食尘！】时间倒流，你回到了大一 9 月。"})
     year_name, year, month = game.timeline.month_text(round_no)
     shown_time = year_name + str(month) + "月"
     stage = game.timeline.stage_of(year, month)
     major_text = ""
     if round_no == 13:
         major_text = "大二开学，你被分到「" + game.data.assign_major(player) + "」专业。"
-    event = game.events.pick_event(events, player, stage, boosts)
+    pool = game.events.apply_forces(events, stage, round_no, forces)
+    event = game.events.pick_event(pool, player, stage, boosts)
     if event is None:
         player["months"].append({"time": shown_time, "text": "这个月没什么特别的事。"})
         new_done = game.achievements.check_achievements(achievements, player, "", "")
@@ -306,11 +377,21 @@ def build_log():
     """把本局每月文本拼成待绘制的行（最新月份在顶端）：(文字, 颜色, 字号, 行高)"""
     lines = []
     for month in reversed(player["months"]):
-        lines.append((month["time"], GREEN, 19, 30))
-        for one in wrap_text(month["text"], get_font(17), 450):
-            lines.append((one, TEXT, 17, 26))
-        lines.append(("", TEXT, 17, 12))
+        lines.append((month["time"], GREEN, 19, 32))
+        for one in wrap_text(month["text"], get_font(18), 445):
+            lines.append((one, TEXT, 18, 29))
+        lines.append(("", TEXT, 18, 14))
     return lines
+
+
+def get_log_panel(w, h):
+    """日志区半透明白底（提升文字清晰度，带缓存）"""
+    key = (w, h)
+    if key not in log_panel_cache:
+        panel = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (255, 255, 255, 180), (0, 0, w, h), border_radius=S(16))
+        log_panel_cache[key] = panel
+    return log_panel_cache[key]
 
 
 def draw_log():
@@ -322,6 +403,7 @@ def draw_log():
         total = total + line[3]
     if log_follow:
         log_scroll = 0
+    screen.blit(get_log_panel(S(480), S(LOG_HEIGHT)), (X(30), Y(LOG_TOP)))
     area = pygame.Rect(X(30), Y(LOG_TOP), S(480), S(LOG_HEIGHT))
     screen.set_clip(area)
     y = LOG_TOP - log_scroll
@@ -359,14 +441,16 @@ def clear_attr():
 
 
 def draw_start():
-    draw_title("选择天赋（5 选 3）", 30, 30, 22)
+    draw_title("选择天赋（5 选 2）", 30, 30, 22)
     for i in range(len(talent_choices)):
         talent = talent_choices[i]
         rect = (30, 62 + i * 74, 480, 66)
         selected = talent in chosen
-        draw_card(rect, selected, GREEN_LIGHT if selected else WHITE)
+        tier_color = TIER_COLORS[talent["tier"]]
+        draw_card(rect, selected, GREEN_LIGHT if selected else WHITE, tier_color)
         draw_text(talent["name"], 50, 76 + i * 74, 19)
-        draw_text(talent["desc"], 50, 102 + i * 74, 15, TEXT_DIM)
+        draw_text("【" + TIER_NAMES[talent["tier"]] + "】" + talent["desc"],
+                  50, 102 + i * 74, 15, tier_color)
     draw_title("分配属性点（每项 0-10）", 30, 444, 22)
     draw_button((300, 440, 100, 36), "随机分配", size=14, primary=False)
     draw_button((410, 440, 100, 36), "清  零", size=14, primary=False)
@@ -381,26 +465,33 @@ def draw_start():
         draw_button((360, y + 4, 44, 44), "+", primary=False)
     draw_text("剩余点数：" + str(points_left), 50, 732, 19)
     draw_button((30, 850, 150, 64), "返回首页", size=17, primary=False)
-    draw_button((195, 850, 315, 64), "开  始", disabled=len(chosen) != 3)
+    draw_button((195, 850, 315, 64), "开  始")
 
 
-def draw_game():
-    draw_text(shown_time, 30, 30, 26)
+def draw_info_cards(x, y):
+    """画「书院·专业」「天赋」「属性」三张信息卡片（从 y 起，纵向排列）"""
     line = "书院：" + player["shuyuan"]
     if player["major"] != "":
         line = line + "　专业：" + player["major"]
-    draw_text(line, 30, 70, 15, TEXT_DIM)
-    pygame.draw.line(screen, GREEN, (X(30), Y(94)), (X(30 + text_width(line, 15)), Y(94)))
+    draw_card((x, y, 480, 46), False, GREEN_LIGHT)
+    draw_text(line, x + 20, y + 12, 19, GREEN)
+    if len(chosen) > 0:
+        draw_card((x, y + 54, 480, 46), False, BROWN_LIGHT, BROWN)
+        draw_text("天赋：" + "　".join([t["name"] for t in chosen]), x + 20, y + 66, 19, BROWN)
     info = ""
     for name in ["智力", "体质", "颜值", "家境"]:
         info = info + name + " " + fmt(player["attrs"][name]) + "　"
-    draw_text(info, 30, 110, 19)
-    pygame.draw.line(screen, GREEN, (X(30), Y(138)), (X(30 + text_width(info, 19)), Y(138)))
-    pygame.draw.line(screen, LINE, (X(30), Y(158)), (X(510), Y(158)))
+    draw_card((x, y + 108, 480, 46), False, WHITE, DARK_GREEN)
+    draw_text(info, x + 20, y + 120, 19, TEXT)
+
+
+def draw_game():
+    draw_text(shown_time, 30, 22, 26)
+    draw_info_cards(30, 62)
     if major_text != "":
-        pygame.draw.rect(screen, BROWN_LIGHT, (X(30), Y(162), S(480), S(34)),
-                         border_radius=S(8))
-        draw_text(major_text, 44, 170, 15, BROWN)
+        pygame.draw.rect(screen, GREEN, (X(30), Y(224), S(480), S(34)), border_radius=S(8))
+        draw_text(major_text, 44, 231, 15, WHITE)
+    pygame.draw.line(screen, LINE, (X(30), Y(270)), (X(510), Y(270)))
     draw_log()
     draw_button((30, 860, 150, 64), "继  续")
     draw_button((190, 860, 120, 64), "自动:开" if auto_on else "自动:关",
@@ -423,12 +514,12 @@ def draw_pause():
 
 
 def draw_ending():
-    draw_title("结局：" + ending["name"], 30, 60, 30)
-    y = 160
+    draw_title("结局：" + ending["name"], 30, 30, 30)
+    draw_info_cards(30, 80)
+    y = 260
     for line in wrap_text(ending["text"], get_font(19), 480):
         draw_text(line, 30, y, 19)
         y = y + 34
-    draw_text("书院：" + player["shuyuan"] + "　专业：" + player["major"], 30, 640, 15, TEXT_DIM)
     draw_button((30, 850, 150, 64), "回顾本局", size=15, primary=False)
     draw_button((195, 850, 150, 64), "返回首页", size=15, primary=False)
     draw_button((360, 850, 150, 64), "再来一局", size=15)
@@ -459,17 +550,21 @@ def draw_review():
     y = 105 - scroll
     for i in range(len(games)):
         item = games[len(games) - 1 - i]
-        draw_card((30, y, 480, 64))
-        draw_text("第 " + str(i + 1) + " 局", 50, y + 10, 19)
+        draw_card((30, y, 480, 80))
+        draw_text("第 " + str(i + 1) + " 局", 50, y + 8, 19)
         draw_text(item["shuyuan"] + " · " + item["major"] + " · " + item["ending"],
-                  50, y + 36, 15, TEXT_DIM)
-        y = y + 72
+                  50, y + 34, 15, TEXT_DIM)
+        if len(item.get("talents", [])) > 0:
+            draw_text("天赋：" + "　".join(item.get("talents", [])), 50, y + 56, 14, TEXT_DIM)
+        y = y + 88
     draw_button((30, 860, 200, 64), "导出 txt", primary=False)
     draw_button((245, 860, 265, 64), "返回首页", primary=False)
 
 
 def draw_detail():
     draw_title("本局回顾", 30, 30, 24)
+    if len(detail_game.get("talents", [])) > 0:
+        draw_text_right("天赋：" + "　".join(detail_game.get("talents", [])), 510, 36, 15)
     pygame.draw.line(screen, LINE, (X(30), Y(90)), (X(510), Y(90)))
     y = 105 - scroll
     for month in detail_game["months"]:
@@ -527,7 +622,7 @@ while running:
                         talent = talent_choices[i]
                         if talent in chosen:
                             chosen.remove(talent)
-                        elif len(chosen) < 3:
+                        elif len(chosen) < 2:
                             chosen.append(talent)
                 names = ["智力", "体质", "颜值", "家境"]
                 for i in range(len(names)):
@@ -546,9 +641,11 @@ while running:
                     clear_attr()
                 if hit((30, 850, 150, 64), pos):
                     scene = "首页"
-                if hit((195, 850, 315, 64), pos) and len(chosen) == 3:
+                if hit((195, 850, 315, 64), pos):
                     game.player.apply_talents(player, chosen)
                     boosts = game.player.collect_boosts(chosen)
+                    forces = game.player.collect_forces(chosen)
+                    rewind_rate = game.player.collect_rewind(chosen)
                     for name in names:
                         player["attrs"][name] = float(attr_edit[name])
                     scene = "游戏"
@@ -578,7 +675,7 @@ while running:
                     scene = "首页"
             elif scene == "结局":
                 if hit((30, 850, 150, 64), pos):
-                    detail_game = {"months": player["months"]}
+                    detail_game = {"months": player["months"], "talents": [t["name"] for t in chosen]}
                     detail_from = "结局"
                     scroll = 0
                     scene = "回顾详情"
@@ -592,7 +689,7 @@ while running:
             elif scene == "回顾":
                 games = records["games"]
                 for i in range(len(games)):
-                    if hit((30, 105 - scroll + i * 72, 480, 64), pos):
+                    if hit((30, 105 - scroll + i * 88, 480, 80), pos):
                         detail_game = games[len(games) - 1 - i]
                         detail_from = "回顾"
                         scroll = 0

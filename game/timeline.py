@@ -11,7 +11,7 @@ def month_text(round_no):
 
 
 def stage_of(year, month):
-    """判断当前时段（六个时段互不重叠）"""
+    """判断当前时段（七个时段互不重叠：寒假与暑假分开）"""
     if year == 1 and month == 9:
         return "军训"
     if year == 4 and 3 <= month <= 5:
@@ -20,6 +20,8 @@ def stage_of(year, month):
         return "答辩"
     if month == 1 or month == 6:
         return "期末"
-    if month == 2 or month == 7 or month == 8:
-        return "寒暑假"
+    if month == 2:
+        return "寒假"
+    if month == 7 or month == 8:
+        return "暑假"
     return "常规"
