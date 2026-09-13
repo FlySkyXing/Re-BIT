@@ -114,7 +114,7 @@ def roll_check(player, event):
 
 
 def apply_event(player, event, time_text):
-    """应用事件效果，记入本局每月文本，返回变化文字
+    """应用事件效果，记入本局每月文本，返回最终显示文案（判定结果文案）
 
     - 事件带 check 时先掷判定（见 roll_check），判定结果决定文案与效果
     - flags_set 获得状态，flags_clear 移除状态
@@ -155,4 +155,4 @@ def apply_event(player, event, time_text):
     if event["type"] == "特殊":
         player["seen"].append(event["text"])
     player["months"].append({"time": time_text, "text": text})
-    return "，".join(changes)
+    return text

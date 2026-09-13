@@ -4,7 +4,7 @@
 def check_achievements(achievements, player, event_text, ending_name, records):
     """检查成就，返回本局新达成的成就名列表
 
-    - 结局：本局结局命中
+    - 结局：本局结局命中（value 可为结局名或结局名列表）
     - 事件：本回合触发的（或判定结果的）文案命中
     - 属性：某属性达到指定值
     - 排名：综测排名在指定名次以内
@@ -14,8 +14,9 @@ def check_achievements(achievements, player, event_text, ending_name, records):
     done = []
     for achievement in achievements:
         kind = achievement["type"]
-        if kind == "结局" and achievement["value"] == ending_name:
-            done.append(achievement["name"])
+        if kind == "结局":
+            if achievement["value"] == ending_name or ending_name in achievement["value"]:
+                done.append(achievement["name"])
         if kind == "事件" and achievement["value"] == event_text:
             done.append(achievement["name"])
         if kind == "属性":

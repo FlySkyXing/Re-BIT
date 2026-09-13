@@ -366,10 +366,10 @@ def show_round():
                                  "text": "你在「" + player["org"] + "」当选了主席。"})
     pool = game.events.apply_forces(events, stage, round_no, forces)
     event = game.events.pick_event(pool, player, stage, boosts)
-    game.events.apply_event(player, event, shown_time)
+    applied_text = game.events.apply_event(player, event, shown_time)
     if event.get("visit") and event["visit"] not in records["provinces"]:
         records["provinces"].append(event["visit"])
-    new_done = game.achievements.check_achievements(achievements, player, event["text"], "", records)
+    new_done = game.achievements.check_achievements(achievements, player, applied_text, "", records)
     if round_no in (5, 10, 17, 22, 29, 34):
         if round_no < 13:
             total = random.randint(280, 320)
