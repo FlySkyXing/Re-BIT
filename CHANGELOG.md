@@ -7,6 +7,38 @@
 
 ## 未发布
 
+### 2026-09-14 · 移动端适配与 Codespaces 分享
+
+**新增（网页版）** —— `web/`
+- `web/main.py`：根目录 `main.py` 的**独立副本**（877 行），额外做三件事：① 主循环改为 `async def main()` + 每帧 `await asyncio.sleep(0)`（pygbag 要求让出控制权）；② 触屏适配；③ 点击逻辑抽成 `handle_click()`，鼠标左键与手指轻触共用
+- **触屏与手势**：`FINGERDOWN/FINGERUP` 轻触（位移 < 40 基准像素）等价左键点击，且 `hit()` 在手指输入时把命中区**向外放大 12 基准像素**；上/下滑滚动（游戏页滚月度日志、其余页滚列表）；左滑在游戏页推进一个月、右滑打开暂停页；在暂停/结局/成就/回顾/回顾详情右滑返回
+- `web/game/`、`web/data/`、`web/fonts/`、`web/audio/`：资源副本（网页版随包分发，从空存档开始）
+- `web/save/records.json`：空存档（个人记录不随分享包外泄）
+- `web/README.md`：网页版说明、手势表、本地运行、pygbag 打包、**Codespaces 分享步骤**、浏览器限制（无持久存档、音效需先点击）与副本同步提醒
+
+**新增（Codespaces 与依赖声明）**
+- `.devcontainer/devcontainer.json`：Python 3.12 镜像 + `pip install -r requirements.txt` + 转发 **8000** 端口并设为 **Public**（打开即预览）
+- `requirements.txt`：`pygame==2.6.1`（桌面版唯一依赖）+ `pygbag`（仅打包网页版时需要）
+- `.gitignore`：忽略 `__pycache__/`、`*.pyc`、`web/build/`
+
+**原因**
+- 手机端无法运行 pygame 桌面窗口，浏览器是唯一可行的移动端入口；pygbag 是 pygame 官方的 WebAssembly 打包方案（[pygame-web/pygbag](https://github.com/pygame-web/pygbag)）
+- Codespaces 转发端口设为 Public 后即可得到一个手机也能打开的试玩链接（[端口转发文档](https://docs.github.com/en/codespaces/developing-in-a-codespace/forwarding-ports-in-your-codespace)）
+
+**验证**
+- `web/main.py` 语法检查通过；用合成事件（`FINGERDOWN/FINGERUP`、`MOUSEBUTTONDOWN`）跑通全流程：首页轻触 → 开局页上滑 → 「开  始」→ 游戏页左滑推进一个月 → 右滑暂停 → 鼠标点「继续游戏」→ 退出
+- 命中区放大专项验证：鼠标点按钮上方 8px **不**触发；手指点同一位置**触发**；手指点上方 20px 不触发
+- 根目录桌面版 `main.py` **未改动**，冒烟测试正常启动
+
+**未改动**
+- `docs/` 下所有设计文档与 `AGENTS.md` 本轮均未修改（按人类要求）
+- 上一轮记录的待确认问题（`docs/talent.txt` / `color.txt` 缺失、`main.py` 死代码与残留注释、`exports/` 占位文件、`todo.md` 三处不符）**一律保留未处理**
+
+**待人类确认**
+- pygbag 属新增依赖：按准则四需更新 `AGENTS.md` 准则四的技术栈表（本文件由人类维护，代理未擅自修改），建议在「第三方依赖」行注明「pygame（运行）+ pygbag（仅网页版打包）」
+
+---
+
 ### 2026-09-14 · 全量文档核对与同步（对齐当前实现）
 
 **变更（文档同步，共 9 份）**
