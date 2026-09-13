@@ -48,7 +48,7 @@ pygame.init()
 screen = pygame.display.set_mode((BASE_W, BASE_H), pygame.RESIZABLE)
 pygame.display.set_caption("北理工重开模拟器")
 pygame.mixer.init()
-click_sound = pygame.mixer.Sound("audio/click.wav")
+click_sound = pygame.mixer.Sound("audio/click.ogg")
 
 # 缩放状态
 scale = 1.0

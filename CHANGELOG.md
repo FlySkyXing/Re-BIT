@@ -7,6 +7,29 @@
 
 ## 未发布
 
+### 2026-09-14 · 音效格式改为 OGG（Vorbis）
+
+**变更**
+- `audio/click.wav` → **`audio/click.ogg`**：Vorbis / 22050 Hz / 单声道 / 60 ms / 3912 字节（用 ffmpeg `-c:a libvorbis -q:a 6` 转出）
+- `web/audio/click.ogg`：网页版同步替换，并与根目录那份**字节一致**（SHA256 相同，原先两份是各自转码、内容不同）
+- `main.py` 第 51 行、`web/main.py` 第 57 行：`pygame.mixer.Sound("audio/click.ogg")`
+- 文档引用同步：`docs/02-游戏设计.md`（§12 已做项）、`docs/03-项目架构设计.md`（目录树）、`docs/05-页面设计.md`（交互汇总·音效）、`README.md`（文件结构）
+
+**原因**
+- WAV 在浏览器（pygbag / WebAssembly）与部分移动环境下的解码播放兼容性不如 Ogg Vorbis；OGG 体积更小、跨平台播放更稳 —— 这也是本轮做移动端 / 网页版适配后需要换格式的直接原因
+
+**修复（原改动曾误伤历史记录与只读快照）**
+- **恢复只读快照** `archive/2026-09-14/`：一次全局替换波及了快照里的 `CHANGELOG.md`、`docs/03`、`docs/05` 三个文件，已用 `git checkout -- archive` 复原为冻结状态（快照按 `归档说明.md` 约定不再更新）
+- **还原 `CHANGELOG.md` 的历史条目**：2026-09-13 那条记录的当轮事实是 `click.wav`，不应被回溯改写；本轮改动改为**新增本条目**（准则九），而不是改写历史
+
+**验证**
+- OGG 流信息：`vorbis, 22050 Hz, mono`，时长 0.060 秒；`volumedetect` mean −11.5 dB / max −2.2 dB（确有声音，不是静音）
+- `pygame.mixer.Sound("audio/click.ogg")` 加载与播放调用成功
+- 桌面版 `python main.py`、网页版 `web/main.py` 启动均正常
+- 两份副本 SHA256 一致
+
+---
+
 ### 2026-09-14 · 移动端适配与 Codespaces 分享
 
 **新增（网页版）** —— `web/`

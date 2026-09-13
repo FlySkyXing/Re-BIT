@@ -50,7 +50,7 @@
 | `save/records.json` | 存档：最近 5 局记录 + 成就进度 + 走过省份（跨次运行保留） |
 | `exports/` | 导出的 txt 记录 |
 | `fonts/zpix.ttf` | 开源像素字体（Zpix，OFL），仅用于大标题 |
-| `audio/click.wav` | 按钮点击音效 |
+| `audio/click.ogg` | 按钮点击音效 |
 | `AGENTS.md` | AI 协作准则（准则一~九） |
 | `docs/` | 五份设计文档（可行性分析 / 游戏设计 / 项目架构设计 / 程序设计 / 页面设计）+ 内容文档（`talent.md`、`event.md`、`ending.md`）+ 清单（`*-list.md`） |
 | `test_1.md` ~ `test_5.md` | 测试报告 |
