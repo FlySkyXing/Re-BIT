@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>北理工重开模拟器</title>
+<!-- PyScript（基于 Pyodide / WebAssembly）。版本可按需换成 https://pyscript.net/latest/core.js -->
+<script type="module" src="https://pyscript.net/releases/2026.7.2/core.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; background: #7f7f7f; color: #fff;
+               font-family: "Microsoft YaHei", system-ui, sans-serif; }
+  #status { padding: 10px 14px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+  #status.err { color: #ffd2d2; }
+  #canvas { display: block; margin: 0 auto; background: #fff; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<div id="status">正在加载 Pyodide 运行时…</div>
+<!-- SDL 需要这个 canvas 才能渲染：缺了会报 Cannot read properties of undefined (reading 'createImageData') -->
+<canvas id="canvas" width="540" height="960"></canvas>
+
+<script type="module">
+// 依据 Pyodide 官方文档《Using SDL》：
+//   ① SDL 支持是实验性的，必须先启用 opt-in 标志 pyodide._api._skip_unwind_fatal_error = true
+//   ② 必须把 HTMLCanvasElement（id="canvas"）注册给 pyodide.canvas.setCanvas2D
+//   ③ 主循环必须用 async + await asyncio.sleep()（见 web/main.py）
+const sdlTimer = setInterval(() => {
+  const py = window.pyodide;
+  if (py && py.canvas && typeof py.canvas.setCanvas2D === "function") {
+    py._api._skip_unwind_fatal_error = true;
+    py.canvas.setCanvas2D(document.getElementById("canvas"));
+    window.sdlReady = true;
+    clearInterval(sdlTimer);
+    console.log("[页面] 已启用 SDL opt-in 标志并注册 2D 画布");
+  }
+}, 50);
+</script>
+
+<script type="py" config='{"packages": ["pygame-ce"]}'>
+import asyncio
+import os
+import sys
+import traceback
+from js import document
+
+# 需要放进浏览器虚拟文件系统的游戏文件（与桌面版目录结构一致）
+FILES = [
+    "main.py",
+    "game/__init__.py", "game/data.py", "game/player.py", "game/timeline.py",
+    "game/events.py", "game/endings.py", "game/achievements.py", "game/records.py",
+    "data/talents.json", "data/events.json", "data/endings.json", "data/achievements.json",
+    "save/records.json", "fonts/zpix.ttf",
+]
+
+
+def show(text, err=False):
+    el = document.getElementById("status")
+    el.innerText = str(text)
+    if err:
+        el.classList.add("err")
+
+
+async def fetch_into_fs(path):
+    """把网页上的文件读进 Pyodide 的虚拟文件系统"""
+    from pyodide.http import pyfetch
+    resp = await pyfetch(path)
+    data = await resp.bytes()
+    folder = os.path.dirname(path)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(data)
+
+
+async def ensure_pygame():
+    """把 pygame-ce 装上，返回实际生效的方式（便于排错）
+
+    依次尝试：① PyScript 的 config 预加载 ② pyodide_js.loadPackage ③ micropip.install
+    """
+    try:
+        import pygame
+        return "PyScript config 预加载"
+    except ImportError:
+        pass
+
+    try:
+        import pyodide_js
+        await pyodide_js.loadPackage("pygame-ce")
+        import pygame
+        return "pyodide_js.loadPackage"
+    except Exception as first_error:
+        print("[启动] pyodide_js.loadPackage 失败：", repr(first_error))
+
+    import micropip
+    await micropip.install("pygame-ce")
+    return "micropip.install"
+
+
+try:
+    show("正在启用 SDL 支持 …")
+    # 必须等页面脚本按官方文档完成：启用 _skip_unwind_fatal_error + setCanvas2D 注册画布
+    from js import window
+    for _ in range(300):
+        if bool(getattr(window, "sdlReady", False)):
+            break
+        await asyncio.sleep(0.05)
+    sdl_flag = bool(getattr(window, "sdlReady", False))
+    print("[启动] 页面脚本 SDL 就绪标志 =", sdl_flag)
+
+    if not sdl_flag:
+        # 兜底：若页面脚本拿不到 window.pyodide，则用 Python 侧的 JS API 镜像 pyodide_js 完成同样两步
+        try:
+            import pyodide_js
+            pyodide_js._api._skip_unwind_fatal_error = True
+            pyodide_js.canvas.setCanvas2D(document.getElementById("canvas"))
+            print("[启动] 已在 Python 侧用 pyodide_js 完成 SDL 启用与画布注册")
+        except Exception as sdl_error:
+            print("[启动] Python 侧 SDL 启用失败：", repr(sdl_error))
+
+    show("正在准备 pygame-ce …")
+    how = await ensure_pygame()
+    print("[启动] pygame-ce 就绪，方式：", how)
+
+    show("正在读取游戏文件 …")
+    for path in FILES:
+        await fetch_into_fs(path)
+    os.makedirs("exports", exist_ok=True)     # 「回顾页 → 导出 txt」按钮会往这里写（浏览器里仅内存）
+
+    sys.path.insert(0, os.getcwd())
+
+    show("正在启动游戏 …")
+    import runpy
+    runpy.run_path("main.py", run_name="__main__")
+    show("")
+except Exception as exc:
+    show("启动失败：" + repr(exc) + "\n\n详细堆栈已打印到浏览器控制台（F12 → Console）", err=True)
+    print(traceback.format_exc())
+</script>
+</body>
+</html>

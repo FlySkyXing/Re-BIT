@@ -7,6 +7,374 @@
 
 ## 未发布
 
+### 2026-09-14 · 新增 exe 打包（PyInstaller --onedir + 资源外置）
+
+**背景**：人类要求「将文件打包成 exe 可执行文件」，并选定 **PyInstaller** + **单目录 + 资源外置**
+
+**新增**
+- `build_exe.ps1`：**一键打包脚本** —— 检查 PyInstaller 是否安装 → `python -m PyInstaller --noconfirm --clean --onedir --noconsole --name "BIT重开模拟器" main.py` → 把 `data/` `fonts/` `audio/` 复制到 exe 旁边 → 生成空白 `save/records.json`（**不带 BOM**，否则 Python 的 `json.load` 会报 `Expecting value`）与 `exports/` → **启动自检**（dummy 视频驱动跑 3 秒，进程未在 3 秒内退出即通过）→ 打印交付说明
+- `.gitignore`：新增 `build/`、`dist/`、`*.spec`（PyInstaller 产物）
+- `requirements.txt`：以**注释形式**注明打包工具（不参与运行期安装）
+- `README.md`：新增「打包成 exe（Windows）」小节（安装、一键打包、脚本做了什么、产物与交付方式、为什么不选 `--onefile`）
+
+**设计取舍（准则二检索依据）**
+- `--onefile` 需把资源打进包、代码改用 `sys._MEIPASS` 取路径（[PyInstaller #8997](https://github.com/pyinstaller/pyinstaller/issues/8997)），且每次启动解压到临时目录 → **启动慢几秒、常被杀软误报**（[onefile 机制](https://devbytes.co.in/news/understanding-pyinstallers-onefile-mode)、[误报案例](https://github.com/TomSchimansky/TkinterMapView/issues/136)、[方案对比](https://codegym.cc/groups/posts/python-script-to-exe)）
+- 故选 **`--onedir` + 资源外置**：**零代码改动**、启动快、误报少；交付时压缩整个目录即可
+
+**验证（本地可验证的部分）**
+- 脚本语法检查通过（UTF-8 带 BOM，Windows PowerShell 5.1 下中文不乱码）
+- 存档写入逻辑单独验证：生成的 `records.json` 无 BOM，`json.load` 解析成功
+- **未执行实际打包**：本机未安装 PyInstaller 且沙箱无网络（`pip install` 不可用）
+
+**待人类执行**
+1. `python -m pip install pyinstaller`
+2. `powershell -ExecutionPolicy Bypass -File build_exe.ps1`
+3. 双击 `dist\BIT重开模拟器\BIT重开模拟器.exe` 验证；交付时压缩整个 `dist\BIT重开模拟器` 目录
+
+**待人类确认（准则四）**：`AGENTS.md` 准则四的技术栈表可考虑加一行「打包工具：PyInstaller（仅构建 exe 时使用）」—— 该文件由人类维护，代理未擅自改动
+
+---
+
+### 2026-09-14 · PyScript / Pyodide 路线终止（失败归档）与清理
+
+**结论：网页版第二条路线（PyScript / Pyodide）终止** —— 人类裁定「打开主页，但在运行中报错，请同样放弃该路线」
+
+**这条路线走到哪一步（备查）**
+
+1. ✅ PyScript 与 Pyodide 加载成功（`/lib/python314.zip/`，该版本内置 **Python 3.14.2**）
+2. ✅ `pygame-ce 2.5.7 (SDL 2.32.10)` 安装成功（`config='{"packages": ["pygame-ce"]}'` 声明式预加载生效）
+3. ✅ 按官方《Using SDL》启用实验性 SDL 的 opt-in 标志 `pyodide._api._skip_unwind_fatal_error = true`，并用 `pyodide.canvas.setCanvas2D()` 注册 `id="canvas"` 画布
+4. ✅ **游戏首页成功渲染在页面画布上**（比 pygbag 路线走得远得多）
+5. ❌ 随后在**运行中**报错（人类未提供具体堆栈）→ 终止，不再投入
+
+**变更（清理）**
+- 删除 `web/`（20 个文件）：网页版源码副本（async 改造版 `main.py`）、PyScript 引导页、`web/README.md`、游戏资源副本
+- **归档唯一不可再生的产物**：`archive/2026-09-14-pyscript/index.html` + `归档说明.md` —— 该引导页积累了四轮浏览器实测的结论，无法靠推导重建；说明文件里记下了 6 条必备结论（Python 侧无 `loadPackage` 要用 `pyodide_js`、`micropip` 默认不加载、SDL 需 opt-in 标志、需 `setCanvas2D` 注册画布、主循环必须 async、官方文档链接）
+- **遗留**：空目录 `web\audio` 被其它进程占用未能删除（应是仍有终端停留在 `web\` 目录下）；关闭该终端后执行 `rmdir /s /q web` 即可
+
+**两条网页路线至此均已终止**
+- pygbag（社区 WASM 打包器）：见「网页部署路线终止（失败归档）与相关文件清理」
+- PyScript / Pyodide：本条
+
+**未受影响**：桌面版 `main.py`、`game/`、`data/`、`docs/`、`AGENTS.md` 一律未改动；`archive/` 仅新增一个快照目录
+
+---
+
+### 2026-09-14 · 按官方《Using SDL》文档启用 SDL opt-in 标志（人类提供文档原文）
+
+**背景**：人类第四次实测的日志里 Python 侧注册画布失败，并提供了 Pyodide 官方文档《Using SDL》原文。文档给出三条硬要求，此前我们**漏了第 1 条**（这正是「Pyodide has suffered a fatal error」的直接原因）：
+
+1. SDL 支持在 Pyodide 中**实验性**，必须启用 opt-in 标志：`pyodide._api._skip_unwind_fatal_error = true;`
+2. 必须注册画布，且对象要是 `id="canvas"` 的 `HTMLCanvasElement`：`pyodide.canvas.setCanvas2D(canvas)`
+3. 主循环必须 async + 每帧 `await asyncio.sleep(1 / fps)`（此前已按官方 PyScript 示例做到）
+
+**修复**
+- `web/index.html`
+  - 页面脚本：轮询等 `window.pyodide` 就绪 → **设 `_skip_unwind_fatal_error = true`** + `pyodide.canvas.setCanvas2D(canvas)` → 置 `window.sdlReady = true`
+  - Python 启动段：**先等 `window.sdlReady`（最多 15 秒）**，再导入 pygame-ce 并运行 `main.py` —— 确保 opt-in 标志早于 `set_mode` 生效；若页面脚本拿不到 `window.pyodide`，则用 `pyodide_js` 兜底完成同样两步（并打印实际生效路径）
+  - 顶部补 `import asyncio`
+- `web/README.md`：新增「附二：Pyodide 官方对 SDL 的三条硬要求」，逐条给出官方写法与本目录实现方式
+
+**说明**：官方文档明确 SDL 支持「依赖 Emscripten 与 SDL 的未公开行为，未来可能损坏或改变」，属实验特性 —— 这也是本路线需要多次实测迭代的原因
+
+---
+
+### 2026-09-14 · 注册 2D 画布给 Pyodide 的 SDL（浏览器第四次实测反馈）
+
+**背景**：人类第四次实测 —— 包加载✓（`pygame-ce 2.5.7 (SDL 2.32.10, Python 3.14.2)` 横幅已打印），页面里也已有 `<canvas id="canvas">`，但 `main.py` 第 49 行 `pygame.display.set_mode(...)` 仍触发 Pyodide 致命错误：
+
+```
+TypeError: Cannot read properties of undefined (reading 'createImageData')
+```
+
+**判断**：SDL 不是「自动找页面上叫 canvas 的元素」，而是需要把画布**显式注册**给 Pyodide 的画布 API；未注册时其内部画布为 `undefined`，`set_mode` 便崩在这一行
+
+**修复**
+- `web/index.html`：
+  - `<body>` 里在 canvas 之后插入一段 `type="module"` 脚本：轮询等待 `window.pyodide` 就绪后调用 **`pyodide.canvas.setCanvas2D(canvas)`** 注册画布（带 `typeof` 存在性判断，API 不存在时不抛错）
+  - Python 启动段**也注册一次**（`from js import pyodide` → `pyodide.canvas.setCanvas2D(...)`），以消除「Python 先于页面脚本跑到 `set_mode`」的时序竞争；失败时打印提示并依赖页面脚本兜底
+- `web/main.py`：`set_mode((BASE_W, BASE_H), pygame.RESIZABLE)` → **去掉 `RESIZABLE`**（浏览器里画布尺寸由页面决定）
+
+**待人类再测**（改的是页面与 main.py，刷新即可，无需重新构建）：整页强刷 `Ctrl+Shift+R`（上次是致命错误，运行时已失效）
+
+**仍不确定的点**：`pyodide.canvas.setCanvas2D` 这一 API 名称来自记忆，尚未对照官方文档。若本次仍失败，需要人类把 [Pyodide · Using SDL](https://pyodide.org/en/stable/usage/sdl.html) 页面里关于 canvas 的段落贴过来对齐
+
+---
+
+### 2026-09-14 · 补回 canvas（浏览器第三次实测反馈）
+
+**背景**：人类第三次实测 —— **包加载这关过了**（控制台打印 `[启动] pygame-ce 就绪，方式：PyScript config 预加载`，即第一层 `config='{"packages": ["pygame-ce"]}'` 生效），但随后 Pyodide 致命错误：
+
+```
+Pyodide has suffered a fatal error …
+TypeError: Cannot read properties of undefined (reading 'createImageData')
+  File "main.py", line 49 in <module>        ← pygame.display.set_mode((540, 960), pygame.RESIZABLE)
+```
+
+**根因**：页面里**没有 `<canvas id="canvas">`**，SDL 拿不到 2D 上下文。（上一轮我按官方示例「没有 canvas 配置」推断可以省略 canvas，是**误判**；官方示例省略它是因为 PyScript 的 PyGame 支持可能自行创建，而在本用法下 SDL 需要显式画布。）
+
+**修复**
+- `web/index.html`：`<body>` 里补回 `<canvas id="canvas" width="540" height="960"></canvas>` 及其样式，并加注释说明缺失会导致该致命错误
+- `web/README.md`：排错表把「看不到画面」一行改写为实测结论（含完整报错特征与「致命错误需整页刷新」的提示）；§6 更正「不再手写 canvas」的说法
+
+**注意**：该错误是 Pyodide 级致命错误，整个运行时失效，**改完必须整页刷新（Ctrl+Shift+R）**才有意义
+
+**进展**：网页版已连续推进 —— 加载 Pyodide ✓ → 装 pygame-ce ✓（config 预加载）→ 现在卡在显示初始化，属最后一个环节
+
+---
+
+### 2026-09-14 · 修复 pygame-ce 加载方式（浏览器第二次实测反馈）
+
+**背景**：人类第二次实测反馈 `AttributeError("module 'pyodide' has no attribute 'loadPackage'")` —— **`loadPackage` 是 Pyodide 的 JS 侧 API，Python 侧没有**；Python 侧对应的是 `pyodide_js` 模块
+
+**修复**
+- `web/index.html`：把「装 pygame-ce」改成**三层加载策略**，并把实际生效的方式打印到控制台，便于后续排错：
+  1. **`<script type="py" config='{"packages": ["pygame-ce"]}'>`** —— PyScript 声明式预加载（若生效则后面两层都不会执行）
+  2. **`import pyodide_js; await pyodide_js.loadPackage("pygame-ce")`** —— Python 侧的 JS API 镜像
+  3. **`import micropip; await micropip.install("pygame-ce")`** —— 从 PyPI / Pyodide 包索引安装
+- `web/README.md`：排错表新增该报错一行；文末「浏览器侧依赖与版本」补上三层策略说明与控制台标志（`[启动] pygame-ce 就绪，方式：…`）
+
+**说明**：之所以写三层而不是单一写法，是因为 PyScript/Pyodide 各版本的包加载 API 名称不一致（本轮已连续遇到 `micropip` 未预加载、`pyodide.loadPackage` 不存在两种），而每轮实测都要占用人类一次浏览器验证；该策略会让控制台直接告诉我们哪一层可用
+
+**进展**：网页版已能跑进浏览器并执行到包加载阶段（此前 pygbag 从未越过加载画面）
+
+---
+
+### 2026-09-14 · 修复 PyScript 页面的 micropip 加载（浏览器首次实测反馈）
+
+**背景**：人类在浏览器里首次实测，PyScript 与 Pyodide **已成功加载**（控制台显示 `/lib/python314.zip/`，即该版本内置 Python 3.14），脚本执行到第 4 行时报错：
+
+```
+ModuleNotFoundError: No module named 'micropip'
+The module 'micropip' is included in the Pyodide distribution, but it is not installed.
+```
+
+**修复**
+- `web/index.html`：
+  - 顶部不再直接 `import micropip`；改为 `import pyodide`
+  - 安装 pygame-ce 前先 **`await pyodide.loadPackage("micropip")`**（按报错提示的做法），再 `import micropip` 并 `micropip.install("pygame-ce")`
+  - 读入游戏文件后补 `os.makedirs("exports", exist_ok=True)` —— 否则在浏览器里点「回顾页 → 导出 txt」会因目录不存在而报错
+- `web/README.md`：排错对照表新增 micropip 一行；文末新增「浏览器侧依赖与版本」（PyScript 版本、Python 3.14、pygame-ce 安装来源、页面启动顺序）
+
+**意义**：这是网页版**第一次真正跑进浏览器**（此前 pygbag 路线从未越过加载阶段），说明 PyScript/Pyodide 路线在环境上是通的
+
+**待人类再测**：同一地址刷新即可（`python -m http.server -d web 8000` → <http://localhost:8000>），观察状态行是否推进到「正在安装 pygame-ce …」→「正在读取游戏文件 …」→「正在启动游戏 …」
+
+---
+
+### 2026-09-14 · 按 PyScript 官方示例对齐网页版（人类提供示例代码）
+
+**变更**
+- **采纳人类提供的 PyScript 官方 PyGame 示例写法**（[PyScript · PyGame Support](https://docs.pyscript.net/2026.7.2/user-guide/pygame-ce/)）：官方示例表明 —— ① 浏览器里**不需要任何插件 API 或 canvas 配置**，SDL 显示由 PyScript 自动接管；② 主循环每帧用 `await asyncio.sleep(1 / 60)`；③ 入口用兼容惯用法：
+
+  ```python
+  try:
+      asyncio.get_running_loop()          # 浏览器（PyScript）已有事件循环
+      asyncio.create_task(main())
+  except RuntimeError:
+      asyncio.run(main())                 # 本地 Python
+  ```
+
+- `web/main.py`：每帧 `await asyncio.sleep(0)` → **`await asyncio.sleep(1 / 60)`**；末尾 `asyncio.ensure_future(main())` → **官方 `try / except RuntimeError` 惯用法**（副作用：网页版副本在本地也能 `python web/main.py` 直接跑，便于调试）
+- `web/index.html`：**移除手写的 `<canvas id="canvas">`**（官方示例没有 canvas，由 PyScript 自行创建），页面只保留状态行与自举脚本
+- `web/README.md`：差异表与本地测试章节同步；§3 新增「先本地跑一遍网页版副本」；排错表 canvas 行改为「画面看不到时手动加 canvas」；§6 由「待确认」改为「**已按官方示例对齐**」并附官方示例代码
+
+**验证**
+- `web/main.py` 语法通过；**本地实跑 `python web/main.py`（走 `except RuntimeError: asyncio.run` 分支）连续绘制 5 帧后正常退出**（`LOCAL_OK | 已绘制帧数 = 5`）
+- 桌面版 `main.py` 仍未改动
+
+**待人类实测**：浏览器侧仍需你在本地执行 `python -m http.server -d web 8000` → 打开 <http://localhost:8000>
+
+---
+
+### 2026-09-14 · 改用 PyScript / Pyodide 重做网页版（替代 pygbag）
+
+**背景**：pygbag 路线失败后，人类要求改用 Pyodide 系重试，并选定「先试 PyScript」+「不改桌面版 `main.py`」
+
+**调研依据（准则二）**
+- [Pyodide · Using SDL](https://pyodide.org/en/0.29.4/_sources/usage/sdl.md)（官方讲浏览器里跑 SDL 类库）
+- [Pyodide 包索引 · pygame-ce](https://index.pyodide.org/0.26.2/pygame-ce/)（**官方提供 pygame 的 WASM 包**，API 与 pygame 兼容）
+- [PyScript · PyGame Support](https://docs.pyscript.net/2026.7.2/user-guide/pygame-ce/)、[PyGame 插件解析](https://deepwiki.com/pyscript/pyscript/3.2-pygame-plugin)、[Bouncing Ball 官方示例](https://docs.pyscript.net/2026.7.2/example-apps/bouncing-ball/info/)
+- 与 pygbag 的关键差别：Pyodide/PyScript 是官方生态、CDN 走 `pyscript.net` + `cdn.jsdelivr.net`（国内通常可访问）、有官方 pygame 支持，而 pygbag 是社区项目且模板自带 bug
+
+**新增（`web/`，与桌面版分离的副本）**
+- `web/index.html`：PyScript 页面 —— 加载 `core.js` → `micropip.install("pygame-ce")` → 用 `pyFetch` 把 15 个游戏文件写进浏览器虚拟文件系统 → `runpy` 运行 `main.py`；页面顶部有状态行（依次显示「加载 Pyodide / 安装 pygame-ce / 读取游戏文件 / 启动游戏」），出错时把异常摘要显示在页面上、完整堆栈打印到浏览器控制台
+- `web/main.py`：桌面版 `main.py` 的副本，仅三处适配 —— ① 字体统一为随包的 `fonts/zpix.ttf`（浏览器里没有 `C:/Windows/Fonts`）；② 暂不初始化混音器（浏览器音频需用户手势，先保证能启动）；③ 主循环改为 `async def main()` + 每帧 `await asyncio.sleep(0)`，末尾用 `asyncio.ensure_future(main())` 调度（PyScript 已有事件循环，不能用 `asyncio.run`），并补全 `global` 声明
+- `web/README.md`：方案对比、与桌面版差异、本地测试方法、排错对照表、静态发布方式、待对齐官方插件的说明
+
+**未改动**：桌面版 `main.py`、`game/`、`data/`、`docs/` 一行未改（人类要求），`git status` 可核验
+
+**验证（本地；浏览器侧因沙箱无 TLS 无法代验）**
+- 用 asyncio 模拟 PyScript 的执行方式加载 `web/main.py`：启动成功（初始界面「首页」、字体 `fonts/zpix.ttf`、`click_sound = None`），**连续绘制 5 帧**后按 QUIT 正常退出
+- 过程中修掉一个真 bug：循环体被包进函数后，`popup_text` / `chosen` / `points_left` 等**在循环内被赋值的名字必须声明 `global`**，否则抛 `UnboundLocalError`（首次仿真即暴露）
+- 页面声明的 15 个游戏文件在 `web/` 中全部存在
+
+**待人类实测**
+- 浏览器首次实测需人类执行：`python -m http.server -d web 8000` → 打开 <http://localhost:8000>（**不能双击 index.html**，需 http 服务）
+- 若自实现引导不通，需要按官方 PyScript PyGame 插件示例改写 `index.html`
+
+---
+
+### 2026-09-14 · 网页部署路线终止（失败归档）与相关文件清理
+
+**结论：网页版（pygbag / WebAssembly）部署失败，路线终止（人类裁定「不行，仍报错」）**
+
+失败现象与四轮排查记录（备查）：
+
+1. 页面卡在「Loading, please wait ...」
+2. **排查①**：网页版沿用 Windows 系统字体路径（`C:/Windows/Fonts/msyh.ttc`、`seguiemj.ttf`），浏览器虚拟文件系统里不存在 → 改为随包分发的 `fonts/zpix.ttf`
+3. **排查②**：pygbag 默认 `ume_block: 1`，会先停在「Ready to start ! Please click/touch page」等用户点击，期间页面底色为模板自带的 `#7f7f7f`（表现为灰屏）→ 构建加 `--ume_block 0`
+4. **排查③**：控制台报 `PyMain: BrowserFS not found` 并伴随 404 —— pygbag 0.9.3 默认模板把地址拼成 `https://pygame-web.github.io/cdn/0.9.3//browserfs.min.js`（多一个斜杠）→ 构建后自动修补为单斜杠，本地静态自检全部通过
+5. **结果：修复后仍然报错** → 判定该路线在课程工期与当前网络条件下不划算，**终止**
+
+**变更（清理）** —— 删除所有为网页部署准备的文件
+
+- `web/`（34 个文件 / 7.6 MB）：网页版源码副本、触屏与手势适配、pygbag 产物（`web.apk` / `web.tar.gz`）、`web/README.md`
+- `build_web.ps1`、`deploy_web.ps1`、`check_web.ps1`：打包 / 部署 / 自检脚本
+- `.devcontainer/devcontainer.json`：Codespaces 配置
+- `requirements.txt`：移除 `pygbag`，只保留 `pygame==2.6.1`
+- `.gitignore`：移除 `build/`、`web/build/` 两条，仅保留 Python 缓存规则
+- **可恢复性**：`web/` 与 devcontainer 曾提交进仓库（commit `2c88bee`、`5159fb6`），需要时可用 git 历史取回；触屏与手势代码只存在于网页版，随之一并移除
+- **遗留**：空目录 `web\audio` 被其它进程占用（疑为仍在 `web\` 目录下的终端）未能删除，关闭占用进程后手动删除即可
+
+**未受影响**：桌面版 `main.py`、`game/`、`data/`、`docs/`、`AGENTS.md`、`archive/`、`test_*.md` 全部未改动；桌面版 `python main.py` 仍照常运行
+
+**下一步**：改为调研「能直接部署 Python 项目的平台」（见后续条目）
+
+---
+
+### 2026-09-14 · 修复灰屏真因：pygbag 模板 browserfs 地址多一个斜杠
+
+**修复**
+- **根因**：pygbag 0.9.3 默认模板把 browserfs 的地址拼错 —— `{{cookiecutter.cdn}}` 本身已带结尾斜杠，模板却又加了一个：
+
+  ```html
+  <script src="{{cookiecutter.cdn}}pythons.js">        正常
+  <script src="{{cookiecutter.cdn}}/browserfs.min.js"> 多一个斜杠
+  ```
+
+  生成结果 `https://pygame-web.github.io/cdn/0.9.3//browserfs.min.js` **请求 404** → 浏览器挂载不了 apk → 控制台报
+  `PyMain: BrowserFS not found` → 页面一直灰屏
+- `build_web.ps1`：新增**构建后修补**步骤 `$html -replace '/cdn/([0-9.]+)//', '/cdn/$1/'`，自动去掉多余斜杠（每次构建都会执行，重新下载模板也有效）
+- 同步修补构建缓存里的模板 `web/build/web-cache/*.tmpl`（`{{cookiecutter.cdn}}/browserfs.min.js` → `{{cookiecutter.cdn}}browserfs.min.js`）
+- `check_web.ps1`：新增检查项「运行时 URL 无双斜杠」，输出 `[OK] 运行时 URL 无双斜杠（pygbag 模板 bug 已修）` / `[FAIL]` 并打印出错 URL
+
+**变更（文档）**
+- `web/README.md`：§8 新增第 8 条「控制台报 `PyMain: BrowserFS not found`」——含原理、手工修补命令；§10 失败对照表新增一行
+
+**验证**
+- 重新构建后 `index.html` 的 5 个外部 URL 全部为单斜杠；`browserfs.min.js` 一行现为 `https://pygame-web.github.io/cdn/0.9.3/browserfs.min.js`
+- `check_web.ps1` 机械性检查全部通过（含新增的双斜杠检查）
+
+---
+
+### 2026-09-14 · 新增网页版本地检查脚本与检查清单
+
+**新增**
+- `check_web.ps1`：**一键跑完网页版的机械性检查**，五组共 20 余项：
+  - **A 环境**：Python 版本、`pygbag` 是否安装、`PYTHONUTF8` 是否为 1
+  - **B 源码**：`web/` 下 16 项资源齐全性；三个字体路径是否为包内文件（不能是 `C:/Windows/Fonts/...`）；主循环是否 `async def main()`；是否有 `await asyncio.sleep(0)`；有无阻塞调用；语法编译
+  - **C 产物**：`index.html` / `web.apk` / `favicon.png`；`ume_block: 0`；页面标题；绝对路径检查；**解包 apk 校验内部资源齐全、apk 内字体路径、以及 apk 内代码与 `web/main.py` 的 MD5 是否一致**（能自动发现「改完代码没重新构建」）
+  - **D 启动自测**：用 dummy 视频/音频驱动实际启动 `web/main.py` 并跑通一帧（验证字体、数据、音效可加载）
+  - **E 部署前**：`git check-ignore` 确认产物被忽略（提醒必须用 `deploy_web.ps1`）
+- `web/README.md` **§10 本地检查的完整步骤**：脚本用法 + 分组说明 + 浏览器手工实测 7 步（Console / Network / 玩一局 / 响应式 / 设备模式触屏 / 真机局域网）+ **常见失败对照表**（灰屏两种、404、CDN pending、产物过期、方框字、GBK 报错）
+
+**实现说明**
+- 脚本以**带 UTF-8 BOM** 保存：Windows PowerShell 5.1 读取无 BOM 的 UTF-8 脚本时会按 GBK 解码中文，直接语法报错（本轮踩过一次，已修正）
+- 启动自测的临时脚本放在 `%TEMP%`，需 `sys.path.insert(0, os.getcwd())` 才能 `import game.*`（`sys.path[0]` 是脚本所在目录而非工作目录）
+
+**验证**
+- 实测输出：机械性检查全部通过，唯一 `[WARN]` 是预期内的「运行时需访问 pygbag CDN」
+
+---
+
+### 2026-09-14 · 修复部署 404（产物被 .gitignore 忽略）+ 新增部署脚本
+
+**问题**
+- 浏览器报 `Failed to load resource: ... 404 (File not found)`，线上站点打不开
+- **根因**：`web/build/` 在 `.gitignore` 中（第 7 行），因此「把产物复制进 gh-pages 工作区再 `git add -A`」这一做法会让 git **静默忽略整个产物目录** —— 推送出去的 `gh-pages` 分支里没有 `index.html` / `web.apk`，线上自然 404
+- 自查命令：`git check-ignore -v web/build/web/web.apk`（有输出即被忽略）
+
+**新增**
+- `deploy_web.ps1`：**一键部署到 GitHub Pages** —— 构建（可 `-SkipBuild`）→ 把产物复制到**全新临时仓库**（无 `.gitignore`，从根上避开忽略规则）→ `git add -A` → 打印本次提交文件清单 → 强制推送 `gh-pages`；支持 `-DryRun` 演练
+
+**变更（文档）**
+- `web/README.md` 新增 **§9 部署到 GitHub Pages / 静态托管（含 404 坑）**：脚本用法、`git check-ignore` 自查、部署后如何确认线上文件齐全（GitHub 分支页面 / `git ls-tree -r --name-only origin/gh-pages` / F12 Network 看 `web.apk` 是否 200）、Cloudflare Pages 必须拖 `web\build\web` 而不是 `web\`
+
+**验证**
+- `deploy_web.ps1 -SkipBuild -DryRun` 演练通过：临时仓库的提交内容恰为 `index.html`、`web.apk`、`web.tar.gz`、`favicon.png` 四个站点文件（分支根目录）
+
+---
+
+### 2026-09-14 · 定位「Loading 之后灰屏」并改为免点击启动
+
+**修复**
+- `build_web.ps1` 与 `web/README.md`：构建命令加入 **`--ume_block 0`** 并重新打包
+- **根因（pygbag 模板机制，非本项目 bug）**：pygbag 默认 `ume_block: 1`，运行时先等**媒体用户激活**（页面上的「Ready to start ! Please click/touch page」），在点击之前不启动应用；此时页面显示的是模板自带的灰底（`platform.document.body.style.background = "#7f7f7f"`），所以看起来是「Loading 之后灰屏」
+- 关掉这一步后应用会直接启动；音频仍遵循浏览器规则（首次点击后才可发声，本游戏本来就只在点击时播音效）
+
+**文档**
+- `web/README.md` §8 开头新增「两种灰屏」对照表：① 等你点击（用 `--ume_block 0` 消除）② 点过仍旧灰 = Python 启动异常，需按 7 条排查；并说明灰底是模板自带颜色
+
+**验证**
+- 重新构建后 `index.html` 中已是 `ume_block : 0`；apk 内 `assets/main.py` 仍为修复版（`fonts/zpix.ttf`、`async def main()`）
+- 产物：`web/build/web/`（`index.html` 12.5 KB、`web.apk` 1.33 MB、`web.tar.gz`、`favicon.png`）
+
+**构建耗时说明**
+- 构建日志显示 pygbag 会尝试从 CDN 拉取 `default.tmpl` / `favicon.png`，网络不通时会 `retrying in 5 seconds` 造成构建变慢；有缓存后仍能完成构建
+
+---
+
+### 2026-09-14 · 网页版打包完成 + 清理错误产物
+
+**新增**
+- `build_web.ps1`：**一键构建网页版** —— 设好 `PYTHONUTF8=1`、调用 `pygbag --build --app_name re-bit --title "北理工重开模拟器" web`、打印产物清单；加 `-Serve` 参数可顺手起本地服务（含 UTF-8 BOM，兼容 Windows PowerShell 5.1）
+
+**修复（构建阻塞）**
+- **pygbag 在中文 Windows 下用 GBK 读取 `main.py`**，遇到中文直接抛 `UnicodeDecodeError: 'gbk' codec can't decode byte 0x80 ...`；构建前必须设 `$env:PYTHONUTF8='1'`（脚本已内置）
+
+**打包产物（已在本地构建并逐项验证）**
+- 产物目录：**`web/build/web/`**（即 `<应用目录>/build/web`）
+  - `index.html`（12.5 KB，页面标题「北理工重开模拟器」）
+  - **`web.apk`**（1.33 MB）—— 内含 `assets/main.py`、`assets/game/`（8 个模块）、`assets/data/`（4 份 JSON）、`assets/save/records.json`、`assets/fonts/zpix.ttf`、`assets/audio/click.ogg`，共 **17 个文件**
+  - `web.tar.gz`、`favicon.png`
+- **校验**：apk 内 `assets/main.py` 的 `FONT_PATH`/`PIXEL_FONT`/`EMOJI_FONT` 均为 `fonts/zpix.ttf`、主循环为 `async def main()` 且含 `await asyncio.sleep(0)`、代码中无 Windows 字体路径残留；`index.html` 不含绝对路径（子路径部署安全）；本地 HTTP 服务抓取 `index.html` / `web.apk` / `favicon.png` 全部返回 **200**
+
+**清理（错误的打包文件）**
+- 删除仓库根目录的 `build/`：那是把**仓库根目录当应用**打的包（入口是桌面版 `main.py`，非 async 主循环 + Windows 字体路径，必然卡在 Loading），而且把 `docs/`、`archive/`、`test_*.md` 全打进了 2.86 MB 的包
+- 确认 `.gitignore` 同时忽略 `build/` 与 `web/build/`
+
+**文档修正**
+- `web/README.md`：产物路径改回 **`web/build/web/`**、apk 名改为 `web.apk`、新增「Windows 必须开 UTF-8 模式」提示、新增 §8 第 7 条「CDN 卡住」的判定方法与本地化步骤、§4 增加 `build_web.ps1` 用法
+
+**待人类定夺**
+- 生成的 `index.html` 运行时会从 `https://pygame-web.github.io/cdn/0.9.3/` 拉取运行时；国内网络下这同样会表现为**卡在「Loading, please wait ...」**。彻底解决需把 CDN 文件本地化并改写 `index.html`（`web/README.md` §8 第 7 条），该步骤必须在**有网环境**执行（本会话的沙箱拿不到 TLS 凭证）
+
+---
+
+### 2026-09-14 · 修复网页版卡在「Loading, please wait ...」
+
+**修复**
+- `web/main.py`：字体路径从 **Windows 系统字体**（`C:/Windows/Fonts/msyh.ttc`、`C:/Windows/Fonts/seguiemj.ttf`）改为**随包分发**的 `fonts/zpix.ttf`
+- **根因**：浏览器（pygbag / WebAssembly）运行在虚拟文件系统里，**没有 `C:/Windows/Fonts`**；原代码在**第一帧渲染**时调用 `pygame.font.Font("C:/Windows/Fonts/msyh.ttc", 19)` 抛 `FileNotFoundError`，pygbag 的启动画面便永远停在「Loading, please wait ...」
+
+**新增**
+- `web/README.md` §8「卡在 Loading, please wait ... 怎么办」：按顺序的 6 条排查 —— ① F12 Console / `pygbag web` 终端看 traceback ② 构建产物是否齐全（`main.py` / `game/` / `data/` / `save/` / `fonts/` / `audio/`）③ 只能用随包字体 ④ 音效嫌疑 ⑤ GitHub Pages 无法设置 COOP/COEP 头的平台限制 ⑥ 缺字形符号（✌）
+
+**变更（修正此前文档与忽略规则的错误）**
+- **构建产物路径纠正**：实测 `pygbag --build web` 的输出在**仓库根目录的 `build/web/`**（不是 `web/build/web/`），主要文件为 `index.html` + **`re-bit.apk` / `re-bit.tar.gz`（游戏本体被打包进 apk）** + `favicon.png`；`web/README.md` 中 4 处路径已改正，并补充「改了代码必须重新构建」的提醒
+- `.gitignore`：改为忽略真正的构建目录 `build/`（原先写的是 `web/build/`，导致 `build/` 出现在待提交列表）
+
+**验证**
+- `web/main.py` 语法检查通过；用合成 QUIT 事件跑通一帧，字体从 `fonts/zpix.ttf` 正常加载
+- 桌面版 `main.py` **未改动**，仍使用微软雅黑
+
+**影响与待确认**
+- 网页版正文/标题**统一为像素字体 Zpix**（Zpix 为 OFL 可再分发字体，含中文）—— 视觉风格随之变为像素风；若要更接近微软雅黑，需引入可再分发的 CJK 字体（如思源黑体 / Noto Sans SC），属新增资源，待人类定夺
+- 「特立✌」的 `✌` 在 Zpix 中无字形，浏览器里会显示为方框（不影响运行）
+
+---
+
 ### 2026-09-14 · Codespaces 启动优化
 
 **变更**

@@ -40,6 +40,29 @@
 - 天赋：随机抽 5 个、最多选 2 个，效果是「开局属性加成」「提高某类事件的抽取概率」「指定书院」「强制某类事件」等
 - 结局：第 48 回合按「**硬门槛 + 加权竞争**」判定，共 11 条（升学 5 / 就业 4 / 学业 1 / 兜底 1），升学类另按能力分定院校；详见 `docs/ending.md`
 
+## 打包成 exe（Windows）
+
+需要打包工具 **PyInstaller**（**仅构建时需要**，运行游戏不需要）：
+
+    python -m pip install pyinstaller
+
+一键打包（在仓库根目录执行）：
+
+    powershell -ExecutionPolicy Bypass -File build_exe.ps1
+
+脚本做的事：
+
+1. `python -m PyInstaller --onedir --noconsole --name BIT重开模拟器 main.py` —— 把 Python 解释器与 pygame 一起打进 exe
+2. 把 `data/`、`fonts/`、`audio/` 复制到 exe 旁边（**资源不打进 exe，因此游戏代码零改动**）
+3. 生成空白存档 `save/records.json` 与 `exports/` 目录（不带开发机上的个人记录）
+4. **启动自检**：用 dummy 视频驱动跑 3 秒，进程没在 3 秒内退出即视为通过
+
+产物是 `dist\BIT重开模拟器\`，**交付时把这个目录整个压成 zip**，解压后双击 exe 即可游玩；
+存档与导出就在 exe 同目录的 `save\`、`exports\` 里（可跨次保留）。
+
+> 为什么用 `--onedir` 而不是 `--onefile`：`--onefile` 每次启动都要把内容解压到临时目录（启动慢几秒、容易被杀软误报），
+> 且资源内置后代码必须改成从 `sys._MEIPASS` 读路径；`--onedir` + 资源外置则完全不用改代码。
+
 ## 文件结构
 
 | 路径 | 作用 |
