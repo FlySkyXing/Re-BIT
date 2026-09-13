@@ -74,3 +74,30 @@
       Copy-Item game,data,fonts,audio -Destination web -Recurse -Force
 
   （同步 `main.py` 后，`web/main.py` 里的 async 主循环、触屏与手势代码需要重新加回 —— 见本文 §1 的差异表）
+
+## 7. Codespaces 启动太慢怎么办
+
+启动耗时几乎全在容器侧，与游戏代码无关（本仓库 90 个文件 / 9.7 MB）。按**收益从大到小**处理：
+
+| 序号 | 做法 | 位置 | 预计效果 |
+| --- | --- | --- | --- |
+| 1 | **配置 Prebuild（预构建）** | 仓库 Settings → Codespaces → Prebuilds → 新建，分支选 `main` | 新建 Codespace 从数分钟降到 **十几秒**（预构建会把镜像、依赖、扩展全部提前装好） |
+| 2 | **延长闲置超时** | 仓库 Settings → Codespaces → Idle timeout 调到 **240 分钟** | 避免频繁冷启动；已停止的 Codespace 点 **Resume** 比新建快得多 |
+| 3 | 依赖安装放在 `onCreateCommand` | 已改好（`.devcontainer/devcontainer.json`） | `postCreateCommand` **不会被预构建缓存**，`onCreateCommand` 才会；这一步改完，预构建才真正有效 |
+| 4 | 去掉 VS Code 扩展自动安装 | 已改好（移除了 `ms-python.python`） | 省掉约 100 MB 扩展下载；需要时在 Codespaces 里自己装即可 |
+| 5 | 关闭端口自动预览 | 已改好（`onAutoForward` 改为 `notify`） | 启动时不再额外加载一次预览页 |
+| 6 | 机器类型 | 新建 Codespace 时选 **4-core** | 依赖安装阶段更快（免费额度消耗也更快，按需选） |
+| 7 | 网络 | 本地网络 | 国内直连 Codespaces 前端（`*.app.github.dev`、`vscode-cdn.net`）经常很慢，这一步只能靠代理解决 |
+
+### 更省事的路子：静态托管（推荐给"只想给别人玩"的场景）
+
+Codespaces 是**开发环境**，不是托管服务 —— 每次分享都要等它启动。若只是想给同学/老师一个试玩链接，把 pygbag 的静态产物丢到静态托管更合适：
+
+    pygbag --build web          # 产物在 web/build/web/
+    # 再把 web/build/web/ 整目录发布到 GitHub Pages / Cloudflare Pages
+
+- 打开即玩，首屏只需拉一次 WASM 运行时
+- 不占用 Codespaces 额度，也不会因为闲置而失效
+- 首次打开想更快，可用 `pygbag --archive web`（把资源打成单个归档，减少请求数）
+
+> 注意：网页版首屏要下载 `fonts/zpix.ttf`（**4.7 MB**，仅用于首页大标题）与 CPython 的 WASM 运行时，手机首次打开会慢几十秒；想进一步提速，可以给网页版改用系统字体、去掉这个 4.7 MB 资源（属于视觉设计变更，需人类定夺）。

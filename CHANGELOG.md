@@ -7,6 +7,25 @@
 
 ## 未发布
 
+### 2026-09-14 · Codespaces 启动优化
+
+**变更**
+- `.devcontainer/devcontainer.json`
+  - `postCreateCommand` → **`onCreateCommand`**：依赖安装改到会被**预构建**打进快照的生命周期钩子（`postCreateCommand` 在快照之后、分配实例时才跑，等于每次新建都要重装 pygame + pygbag）
+  - **移除** `customizations.vscode.extensions`：不再自动安装 `ms-python.python`（约 100 MB 下载）
+  - `portsAttributes.8000.onAutoForward`：`openPreview` → **`notify`**（启动时不再自动加载预览页）
+- `web/README.md`：新增 **§7「Codespaces 启动太慢怎么办」** —— 按收益排序的 7 条措施（配置 Prebuild、延长闲置超时、依赖钩子、扩展、端口预览、机器类型、网络）+ **静态托管替代方案**（`pygbag --build web` / `--archive web` 发布到 GitHub Pages 等）
+
+**原因**
+- 实测本仓库 **90 个文件 / 9.7 MB**（其中 `fonts/zpix.ttf` 4.7 MB × 2 份，`.git` 2.16 MB）——启动慢**不来自仓库体积**，而来自：容器镜像首次拉取（约 1 GB）、每次新建都重装依赖、VS Code 扩展下载、以及**没有配置预构建**
+- 参考：[GitHub Codespaces prebuilds](https://docs.github.com/en/codespaces/prebuilding-your-codespaces/about-github-codespaces-prebuilds)、[devcontainer 生命周期规范](https://containers.dev/implementors/json_reference/)、[如何缩短 Codespaces 启动时间（社区讨论）](https://github.com/orgs/community/discussions/207723)
+
+**未做（需人类操作或确认后实施）**
+- **Prebuild 预构建、闲置超时、机器类型**属于仓库 Settings 项，本地无 `gh` 也无网络，代理改不了，步骤已写入 `web/README.md` §7
+- **「Actions 构建 WASM + 发布 GitHub Pages」**需要新增 `.github/workflows/*`（GitHub Actions 属新增工具链，按准则四待人类批准）
+
+---
+
 ### 2026-09-14 · 音效格式改为 OGG（Vorbis）
 
 **变更**
