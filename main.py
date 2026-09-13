@@ -348,6 +348,7 @@ def show_round():
         player["major"] = ""
         player["seen"] = []
         player["flags"] = []
+        player["rank_pcts"] = []
         player["months"].append({"time": "大一9月",
                                  "text": "【天赋·败者食尘！】时间倒流，你回到了大一 9 月。"})
     year_name, year, month = game.timeline.month_text(round_no)
@@ -376,13 +377,15 @@ def show_round():
         else:
             total = random.randint(45, 55)
         score = player["attrs"]["智力"] * 10 + player["term_bonus"]
-        rank = int(total * (1 - (score - 20) / 120))
+        pct = game.endings.rank_percentile(score)
+        rank = int(total * pct / 100)
         if rank < 1:
             rank = 1
         if rank > total:
             rank = total
         player["rank"] = rank
         player["term_bonus"] = 0
+        player["rank_pcts"].append(pct)
         if rank == 1 and "Rank1" not in player["flags"]:
             player["flags"].append("Rank1")
         if rank > 1 and "Rank1" in player["flags"]:
@@ -404,7 +407,7 @@ def show_round():
     if round_no > 48:
         ending = game.endings.judge_ending(endings, player)
         if "{school}" in ending["text"]:
-            ending_school = game.endings.judge_school(player)
+            ending_school = game.endings.judge_school(player, ending.get("school") == "高位")
         else:
             ending_school = ""
         for name in game.achievements.check_achievements(achievements, player, "", ending["name"], records):

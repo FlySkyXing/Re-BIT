@@ -18,6 +18,7 @@ def new_player(shuyuan_list):
         "months": [],
         "term_bonus": 0,
         "rank": 0,
+        "rank_pcts": [],
         "cet4": 0,
         "cet6": 0,
         "check_bonus": {},

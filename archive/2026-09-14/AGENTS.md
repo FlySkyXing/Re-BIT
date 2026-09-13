@@ -14,7 +14,7 @@
 | 范围 | 本科四年，每月 1 回合，共 **48 回合** |
 | 代码位置 | 正式代码在**仓库根目录**（`main.py` + `game/`）；原型保留在 `prototype/` |
 | 数据与存档 | 文案 `data/*.json`；存档 `save/records.json`；导出 `exports/` |
-| 文档 | 设计文档 `docs/`（`01`~`05`）；内容文档与清单：天赋 `docs/talent.md` / `talent-list.md`、事件 `docs/event.md` / `event-list.md`、结局 `docs/ending.md` / `ending-list.md`、成就 `docs/achievement-list.md`；测试报告 `test_1.md`~`test_5.md`；更新日志 `CHANGELOG.md`；历史快照 `archive/` |
+| 文档 | 设计文档 `docs/`（`01`~`05`）；天赋设计 `docs/talent.md`、清单 `docs/talent-list.md`；事件设计 `docs/event.md`、清单 `docs/event-list.md`；测试报告 `test_1.md`；更新日志 `CHANGELOG.md` |
 | 交付物 | 应用程序、程序演示视频、汇报 PPT、《项目文档》 |
 | 详细设计 | **一律以 `docs/` 的五份文档为准**，本文件不重复其内容 |
 
