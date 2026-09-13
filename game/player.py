@@ -4,15 +4,23 @@ import random
 
 
 def new_player(shuyuan_list):
-    """新的一局：书院随机分配，属性从 0 开始"""
+    """新的一局：随机性别与书院，属性从 0 开始；性别写入 flags 供事件判定"""
+    gender = random.choice(["男", "女"])
     return {
+        "gender": gender,
         "shuyuan": random.choice(shuyuan_list),
         "major": "",
+        "org": "",
         "attrs": {"智力": 0.0, "体质": 0.0, "颜值": 0.0, "家境": 0.0},
         "tags": [],
-        "flags": [],
+        "flags": [gender],
         "seen": [],
         "months": [],
+        "term_bonus": 0,
+        "rank": 0,
+        "cet4": 0,
+        "cet6": 0,
+        "check_bonus": {},
     }
 
 
@@ -33,10 +41,22 @@ def draw_talents(talents):
 
 
 def apply_talents(player, chosen):
-    """应用选中的 3 个天赋"""
+    """应用选中的天赋：性别、书院、状态、判定加成，最后加属性"""
     for talent in chosen:
+        if talent.get("gender"):
+            player["gender"] = talent["gender"]
+            for g in ("男", "女"):
+                if g in player["flags"] and g != talent["gender"]:
+                    player["flags"].remove(g)
+            if talent["gender"] not in player["flags"]:
+                player["flags"].append(talent["gender"])
         if talent["shuyuan"] != "":
             player["shuyuan"] = talent["shuyuan"]
+        for flag in talent.get("flags_set", []):
+            if flag not in player["flags"]:
+                player["flags"].append(flag)
+        for tag, bonus in talent.get("check_bonus", {}).items():
+            player["check_bonus"][tag] = player["check_bonus"].get(tag, 0) + bonus
     for talent in chosen:
         for name, value in talent["effects"].items():
             player["attrs"][name] = player["attrs"][name] + value

@@ -8,7 +8,9 @@ RECORDS_PATH = "save/records.json"
 def load_records():
     """读存档（成就进度 + 近 5 局记录）"""
     with open(RECORDS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        records = json.load(f)
+    records.setdefault("provinces", [])
+    return records
 
 
 def save_records(records):

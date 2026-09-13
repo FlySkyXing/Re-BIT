@@ -10,6 +10,9 @@ def can_use(event, player, stage):
     for name, value in event.get("need", {}).items():
         if player["attrs"][name] < value:
             return False
+    for name, value in event.get("need_max", {}).items():
+        if player["attrs"][name] >= value:
+            return False
     if event.get("shuyuan") and player["shuyuan"] not in event["shuyuan"]:
         return False
     if event.get("major") and player["major"] not in event["major"]:
@@ -71,32 +74,72 @@ def pick_event(events, player, stage, boosts):
     return random.choices(candidates, weights=weights, k=1)[0]
 
 
+def roll_check(player, event):
+    """掷判定，返回 (结果分支, 分数)
+
+    - 只算分（check.score）：返回 (None, 分数)，用于四六级这类只出分的判定
+    - 多档（check.levels）：得分 = base + Σ(属性值 × 系数) + random(0, roll)，取 min 不超过得分的最高档
+    - 二选一（success / fail）：base + Σ(属性值 × 系数) 作为成功率（夹 5~95），掷 1~100
+    - 天赋 check_bonus 命中的标签会加成得分
+    """
+    check = event["check"]
+    if "score" in check:
+        spec = check["score"]
+        val = spec["base"]
+        for name, factor in spec["attrs"].items():
+            val = val + player["attrs"][name] * factor
+        val = val + random.randint(0, spec.get("roll", 0))
+        if val > spec["max"]:
+            val = spec["max"]
+        return None, val
+    score = check["base"]
+    for name, factor in check["attrs"].items():
+        score = score + player["attrs"][name] * factor
+    for tag, bonus in player["check_bonus"].items():
+        if tag in event["tags"]:
+            score = score + bonus
+    if "levels" in check:
+        score = score + random.randint(0, check.get("roll", 0))
+        for level in check["levels"]:
+            if score >= level["min"]:
+                return level, None
+        return check["levels"][-1], None
+    if score > 95:
+        score = 95
+    if score < 5:
+        score = 5
+    if random.randint(1, 100) <= score:
+        return check["success"], None
+    return check["fail"], None
+
+
 def apply_event(player, event, time_text):
     """应用事件效果，记入本局每月文本，返回变化文字
 
-    - 事件带 check 时先掷判定：成功率 = base + Σ(属性值 × 系数)，夹在 5~95
-    - 判定结果决定文案与效果
+    - 事件带 check 时先掷判定（见 roll_check），判定结果决定文案与效果
     - flags_set 获得状态，flags_clear 移除状态
+    - rank_bonus 累加到本学期的综测加分
+    - set_org 记录加入的学生组织
     """
     text = event["text"]
     effects = event["effects"]
     flags_set = event.get("flags_set", [])
+    rank_bonus = event.get("rank_bonus", 0)
     check = event.get("check")
     if check:
-        rate = check["base"]
-        for name, factor in check["attrs"].items():
-            rate = rate + player["attrs"][name] * factor
-        if rate > 95:
-            rate = 95
-        if rate < 5:
-            rate = 5
-        if random.randint(1, 100) <= rate:
-            result = check["success"]
+        result, got_score = roll_check(player, event)
+        if got_score is None:
+            text = result["text"]
+            effects = result.get("effects", {})
+            flags_set = result.get("flags_set", [])
+            rank_bonus = rank_bonus + result.get("rank_bonus", 0)
         else:
-            result = check["fail"]
-        text = result["text"]
-        effects = result.get("effects", {})
-        flags_set = result.get("flags_set", [])
+            text = event["text"].replace("{score}", str(got_score))
+            if event.get("score_field"):
+                player[event["score_field"]] = got_score
+    if event.get("set_org"):
+        player["org"] = event["set_org"]
+    player["term_bonus"] = player["term_bonus"] + rank_bonus
     changes = []
     for name, value in effects.items():
         player["attrs"][name] = player["attrs"][name] + value

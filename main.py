@@ -47,6 +47,8 @@ LOG_HEIGHT = 556
 pygame.init()
 screen = pygame.display.set_mode((BASE_W, BASE_H), pygame.RESIZABLE)
 pygame.display.set_caption("北理工重开模拟器")
+pygame.mixer.init()
+click_sound = pygame.mixer.Sound("audio/click.wav")
 
 # 缩放状态
 scale = 1.0
@@ -82,6 +84,9 @@ log_follow = True
 detail_game = None
 detail_from = "回顾"
 message = ""
+ending_school = ""
+popup_text = ""
+popup_until = 0
 
 talents, events, endings, achievements = game.data.load_data()
 records = game.records.load_records()
@@ -322,6 +327,7 @@ def write_record(ending_name):
     """把本局写入记录（只保留最近 5 局）"""
     this_game = {
         "date": time.strftime("%Y-%m-%d"),
+        "gender": player["gender"],
         "shuyuan": player["shuyuan"],
         "major": player["major"],
         "ending": ending_name,
@@ -335,6 +341,7 @@ def write_record(ending_name):
 def show_round():
     """推进一个回合"""
     global round_no, shown_time, major_text, ending, scene, message, log_follow, rewind_used
+    global ending_school, popup_text, popup_until
     if rewind_used is False and rewind_rate > 0 and random.randint(1, 100) <= rewind_rate:
         rewind_used = True
         round_no = 1
@@ -349,23 +356,58 @@ def show_round():
     major_text = ""
     if round_no == 13:
         major_text = "大二开学，你被分到「" + game.data.assign_major(player) + "」专业。"
+        if player["org"] != "" and "组织部长" not in player["flags"]:
+            player["flags"].append("组织部长")
+            player["months"].append({"time": shown_time,
+                                     "text": "你在「" + player["org"] + "」留任了部长。"})
+    if round_no == 25 and "组织部长" in player["flags"] and "组织主席" not in player["flags"]:
+        player["flags"].append("组织主席")
+        player["months"].append({"time": shown_time,
+                                 "text": "你在「" + player["org"] + "」当选了主席。"})
     pool = game.events.apply_forces(events, stage, round_no, forces)
     event = game.events.pick_event(pool, player, stage, boosts)
-    if event is None:
-        player["months"].append({"time": shown_time, "text": "这个月没什么特别的事。"})
-        new_done = game.achievements.check_achievements(achievements, player, "", "")
-    else:
-        game.events.apply_event(player, event, shown_time)
-        new_done = game.achievements.check_achievements(achievements, player, event["text"], "")
+    game.events.apply_event(player, event, shown_time)
+    if event.get("visit") and event["visit"] not in records["provinces"]:
+        records["provinces"].append(event["visit"])
+    new_done = game.achievements.check_achievements(achievements, player, event["text"], "", records)
+    if round_no in (5, 10, 17, 22, 29, 34):
+        if round_no < 13:
+            total = random.randint(280, 320)
+        else:
+            total = random.randint(45, 55)
+        score = player["attrs"]["智力"] * 10 + player["term_bonus"]
+        rank = int(total * (1 - (score - 20) / 120))
+        if rank < 1:
+            rank = 1
+        if rank > total:
+            rank = total
+        player["rank"] = rank
+        player["term_bonus"] = 0
+        if rank == 1 and "Rank1" not in player["flags"]:
+            player["flags"].append("Rank1")
+        if rank > 1 and "Rank1" in player["flags"]:
+            player["flags"].remove("Rank1")
+        if rank <= 5 and "排名前5" not in player["flags"]:
+            player["flags"].append("排名前5")
+        if rank > 5 and "排名前5" in player["flags"]:
+            player["flags"].remove("排名前5")
+        player["months"].append({"time": shown_time,
+                                 "text": "综测排名公布：你在年级排第 %d 名 / 共 %d 人。" % (rank, total)})
     for name in new_done:
         if name not in records["achievements"]:
             records["achievements"].append(name)
             message = "达成成就：" + name
+            popup_text = "达成成就：" + name
+            popup_until = pygame.time.get_ticks() + 3000
     log_follow = True
     round_no = round_no + 1
     if round_no > 48:
         ending = game.endings.judge_ending(endings, player)
-        for name in game.achievements.check_achievements(achievements, player, "", ending["name"]):
+        if "{school}" in ending["text"]:
+            ending_school = game.endings.judge_school(player)
+        else:
+            ending_school = ""
+        for name in game.achievements.check_achievements(achievements, player, "", ending["name"], records):
             if name not in records["achievements"]:
                 records["achievements"].append(name)
                 message = "达成成就：" + name
@@ -449,8 +491,7 @@ def draw_start():
         tier_color = TIER_COLORS[talent["tier"]]
         draw_card(rect, selected, GREEN_LIGHT if selected else WHITE, tier_color)
         draw_text(talent["name"], 50, 76 + i * 74, 19)
-        draw_text("【" + TIER_NAMES[talent["tier"]] + "】" + talent["desc"],
-                  50, 102 + i * 74, 15, tier_color)
+        draw_text(talent["desc"], 50, 102 + i * 74, 15, tier_color)
     draw_title("分配属性点（每项 0-10）", 30, 444, 22)
     draw_button((300, 440, 100, 36), "随机分配", size=14, primary=False)
     draw_button((410, 440, 100, 36), "清  零", size=14, primary=False)
@@ -487,6 +528,7 @@ def draw_info_cards(x, y):
 
 def draw_game():
     draw_text(shown_time, 30, 22, 26)
+    draw_text_right(player["gender"], 510, 24, 22, GREEN)
     draw_info_cards(30, 62)
     if major_text != "":
         pygame.draw.rect(screen, GREEN, (X(30), Y(224), S(480), S(34)), border_radius=S(8))
@@ -517,7 +559,7 @@ def draw_ending():
     draw_title("结局：" + ending["name"], 30, 30, 30)
     draw_info_cards(30, 80)
     y = 260
-    for line in wrap_text(ending["text"], get_font(19), 480):
+    for line in wrap_text(ending["text"].replace("{school}", ending_school), get_font(19), 480):
         draw_text(line, 30, y, 19)
         y = y + 34
     draw_button((30, 850, 150, 64), "回顾本局", size=15, primary=False)
@@ -551,7 +593,7 @@ def draw_review():
     for i in range(len(games)):
         item = games[len(games) - 1 - i]
         draw_card((30, y, 480, 80))
-        draw_text("第 " + str(i + 1) + " 局", 50, y + 8, 19)
+        draw_text("第 " + str(i + 1) + " 局（" + item.get("gender", "—") + "）", 50, y + 8, 19)
         draw_text(item["shuyuan"] + " · " + item["major"] + " · " + item["ending"],
                   50, y + 34, 15, TEXT_DIM)
         if len(item.get("talents", [])) > 0:
@@ -562,7 +604,7 @@ def draw_review():
 
 
 def draw_detail():
-    draw_title("本局回顾", 30, 30, 24)
+    draw_title("本局回顾 · " + detail_game.get("gender", "—"), 30, 30, 24)
     if len(detail_game.get("talents", [])) > 0:
         draw_text_right("天赋：" + "　".join(detail_game.get("talents", [])), 510, 36, 15)
     pygame.draw.line(screen, LINE, (X(30), Y(90)), (X(510), Y(90)))
@@ -604,6 +646,7 @@ while running:
                 show_round()
                 last_advance = pygame.time.get_ticks()
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            click_sound.play()
             pos = event.pos
             if scene == "首页":
                 if hit((120, 460, 300, 64), pos):
@@ -648,6 +691,13 @@ while running:
                     rewind_rate = game.player.collect_rewind(chosen)
                     for name in names:
                         player["attrs"][name] = float(attr_edit[name])
+                    player["months"].append({"time": "大一9月",
+                                             "text": "你是一名" + player["gender"] + "生，是北理工的大一新生。"})
+                    if "北理新生" not in records["achievements"]:
+                        records["achievements"].append("北理新生")
+                        message = "达成成就：北理新生"
+                        popup_text = "达成成就：北理新生"
+                        popup_until = pygame.time.get_ticks() + 3000
                     scene = "游戏"
                     show_round()
                     last_advance = pygame.time.get_ticks()
@@ -675,7 +725,8 @@ while running:
                     scene = "首页"
             elif scene == "结局":
                 if hit((30, 850, 150, 64), pos):
-                    detail_game = {"months": player["months"], "talents": [t["name"] for t in chosen]}
+                    detail_game = {"months": player["months"], "gender": player["gender"],
+                                   "talents": [t["name"] for t in chosen]}
                     detail_from = "结局"
                     scroll = 0
                     scene = "回顾详情"
@@ -723,5 +774,9 @@ while running:
         draw_review()
     else:
         draw_detail()
+    if popup_text != "" and pygame.time.get_ticks() < popup_until:
+        draw_card((20, 770, 340, 76), False, GREEN_LIGHT)
+        draw_text(popup_text, 40, 788, 17, DARK_GREEN)
+        draw_text("（成就已记录，可在首页「成就」查看）", 40, 814, 13, TEXT_DIM)
     pygame.display.flip()
 pygame.quit()
