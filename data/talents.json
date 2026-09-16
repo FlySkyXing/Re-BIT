@@ -486,6 +486,25 @@
       "flags_set": [
         "警惕"
       ]
+    },
+    {
+      "name": "根正苗红",
+      "tier": "紫",
+      "desc": "你更有可能走入党流程",
+      "effects": {},
+      "shuyuan": "",
+      "boost": {
+        "入党": 5
+      },
+      "force": {
+        "round": 0,
+        "stages": [],
+        "tags": []
+      },
+      "rewind": 0,
+      "gender": "",
+      "check_bonus": {},
+      "flags_set": []
     }
   ]
 }

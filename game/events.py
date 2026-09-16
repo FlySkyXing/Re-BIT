@@ -61,7 +61,15 @@ def pick_event(events, player, stage, boosts):
             continue
         if event["type"] == "特殊" and event["text"] in player["seen"]:
             continue
-        if random.randint(1, 100) > event.get("chance", 100):
+        chance = event.get("chance", 100)
+        if event.get("chance_attr"):
+            spec = event["chance_attr"]
+            chance = spec["base"]
+            for name, factor in spec["attrs"].items():
+                chance = chance + player["attrs"][name] * factor
+            if chance > spec["max"]:
+                chance = spec["max"]
+        if random.randint(1, 100) > chance:
             continue
         weight = event.get("weight", 1)
         for tag, times in boosts.items():
@@ -91,7 +99,7 @@ def roll_check(player, event):
         val = val + random.randint(0, spec.get("roll", 0))
         if val > spec["max"]:
             val = spec["max"]
-        return None, val
+        return None, int(val)
     score = check["base"]
     for name, factor in check["attrs"].items():
         score = score + player["attrs"][name] * factor
@@ -138,7 +146,7 @@ def apply_event(player, event, time_text):
             if event.get("score_field"):
                 player[event["score_field"]] = got_score
     if event.get("set_org"):
-        player["org"] = event["set_org"]
+        player["org"] = event["set_org"].replace("{shuyuan}", player["shuyuan"])
     player["term_bonus"] = player["term_bonus"] + rank_bonus
     changes = []
     for name, value in effects.items():
@@ -152,6 +160,7 @@ def apply_event(player, event, time_text):
     for flag in event.get("flags_clear", []):
         if flag in player["flags"]:
             player["flags"].remove(flag)
+    text = text.replace("{shuyuan}", player["shuyuan"])
     if event["type"] == "特殊":
         player["seen"].append(event["text"])
     player["months"].append({"time": time_text, "text": text})

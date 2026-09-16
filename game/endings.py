@@ -54,6 +54,9 @@ def fits(ending, player):
     for name, value in ending.get("need_max", {}).items():
         if player["attrs"][name] >= value:
             return False
+    for flag in ending.get("flags_need", []):
+        if flag not in player["flags"]:
+            return False
     if "rank_max" in ending and average_rank(player) > ending["rank_max"]:
         return False
     return True

@@ -10,6 +10,7 @@ def check_achievements(achievements, player, event_text, ending_name, records):
     - 排名：综测排名在指定名次以内
     - 数值：玩家身上的数值字段达到指定值（如六级分数）
     - 全局：跨局累计（如走遍全国的省份数）
+    - 状态：玩家身上的状态全部具备（如「同性恋爱」+「女」）
     """
     done = []
     for achievement in achievements:
@@ -33,4 +34,11 @@ def check_achievements(achievements, player, event_text, ending_name, records):
             for name, value in achievement["value"].items():
                 if len(records[name]) >= value:
                     done.append(achievement["name"])
+        if kind == "状态":
+            hit = True
+            for flag in achievement["value"]:
+                if flag not in player["flags"]:
+                    hit = False
+            if hit:
+                done.append(achievement["name"])
     return done
