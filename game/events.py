@@ -3,9 +3,11 @@
 import random
 
 
-def can_use(event, player, stage):
-    """判断事件能否触发：时段、属性下限、书院、专业、状态（flags）"""
+def can_use(event, player, stage, round_no):
+    """判断事件能否触发：时段、专属回合、属性下限、书院、专业、状态（flags）"""
     if stage not in event["stage"]:
+        return False
+    if event.get("round", 0) != 0 and event["round"] != round_no:
         return False
     for name, value in event.get("need", {}).items():
         if player["attrs"][name] < value:
@@ -47,17 +49,18 @@ def apply_forces(events, stage, round_no, forces):
                 return picked
     return events
 
-def pick_event(events, player, stage, boosts):
+def pick_event(events, player, stage, boosts, round_no):
     """筛出候选事件，按权重随机抽一条；没有候选返回 None
 
     - 事件自带 weight 作为基础权重（保底事件 weight 0.2）
     - 天赋 boost 命中的标签，权重再乘倍率
     - 先掷事件自带的 chance（默认 100），未通过则本月无事件
+    - 带 round 的事件只在指定回合可触发（是否抽中仍按权重竞争，如第 13 / 25 回合的组织线）
     """
     candidates = []
     weights = []
     for event in events:
-        if not can_use(event, player, stage):
+        if not can_use(event, player, stage, round_no):
             continue
         if event["type"] == "特殊" and event["text"] in player["seen"]:
             continue
@@ -160,7 +163,7 @@ def apply_event(player, event, time_text):
     for flag in event.get("flags_clear", []):
         if flag in player["flags"]:
             player["flags"].remove(flag)
-    text = text.replace("{shuyuan}", player["shuyuan"])
+    text = text.replace("{shuyuan}", player["shuyuan"]).replace("{org}", player["org"])
     if event["type"] == "特殊":
         player["seen"].append(event["text"])
     player["months"].append({"time": time_text, "text": text})

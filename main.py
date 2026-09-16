@@ -349,24 +349,17 @@ def show_round():
         player["seen"] = []
         player["flags"] = []
         player["rank_pcts"] = []
-        player["months"].append({"time": "大一9月",
-                                 "text": "【天赋·败者食尘！】时间倒流，你回到了大一 9 月。"})
+        for rewind_event in events:
+            if rewind_event.get("rewind"):
+                game.events.apply_event(player, rewind_event, "大一9月")
     year_name, year, month = game.timeline.month_text(round_no)
     shown_time = year_name + str(month) + "月"
     stage = game.timeline.stage_of(year, month)
     major_text = ""
     if round_no == 13:
         major_text = "大二开学，你被分到「" + game.data.assign_major(player) + "」专业。"
-        if player["org"] != "" and "组织部长" not in player["flags"]:
-            player["flags"].append("组织部长")
-            player["months"].append({"time": shown_time,
-                                     "text": "你在「" + player["org"] + "」留任了部长。"})
-    if round_no == 25 and "组织部长" in player["flags"] and "组织主席" not in player["flags"]:
-        player["flags"].append("组织主席")
-        player["months"].append({"time": shown_time,
-                                 "text": "你在「" + player["org"] + "」当选了主席。"})
     pool = game.events.apply_forces(events, stage, round_no, forces)
-    event = game.events.pick_event(pool, player, stage, boosts)
+    event = game.events.pick_event(pool, player, stage, boosts, round_no)
     applied_text = game.events.apply_event(player, event, shown_time)
     if event.get("visit") and event["visit"] not in records["provinces"]:
         records["provinces"].append(event["visit"])

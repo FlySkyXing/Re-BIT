@@ -3332,5 +3332,66 @@
     "flags_set": [
       "正式党员"
     ]
+  },
+  {
+    "text": "你在「{org}」留任了部长。",
+    "type": "特殊",
+    "stage": [
+      "常规"
+    ],
+    "effects": {},
+    "tags": [],
+    "round": 13,
+    "flags_need": [
+      "组织"
+    ],
+    "flags_forbid": [
+      "组织部长"
+    ],
+    "weight": 30,
+    "flags_set": [
+      "组织部长"
+    ]
+  },
+  {
+    "text": "你在「{org}」当选了主席。",
+    "type": "特殊",
+    "stage": [
+      "常规"
+    ],
+    "effects": {},
+    "tags": [],
+    "round": 25,
+    "flags_need": [
+      "组织部长"
+    ],
+    "flags_forbid": [
+      "组织主席"
+    ],
+    "weight": 30,
+    "flags_set": [
+      "组织主席"
+    ]
+  },
+  {
+    "text": "【天赋·败者食尘！】时间倒流，你回到了大一 9 月。",
+    "type": "特殊",
+    "stage": [
+      "常规",
+      "军训",
+      "期末",
+      "寒假",
+      "暑假",
+      "实习",
+      "答辩"
+    ],
+    "effects": {},
+    "tags": [],
+    "rewind": true,
+    "chance": 0,
+    "flags_need": [
+      "回溯"
+    ],
+    "weight": 1
   }
 ]

@@ -316,7 +316,9 @@
       "rewind": 3,
       "gender": "",
       "check_bonus": {},
-      "flags_set": []
+      "flags_set": [
+        "回溯"
+      ]
     },
     {
       "name": "竞赛大神",
