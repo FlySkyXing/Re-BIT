@@ -104,7 +104,7 @@
 | `docs/项目文档.md` | **课程交付《项目文档》**：关键代码与流程图、效果与结论、运行截图、完成度自我评价 |
 | `docs/list/` | 四份内容清单：`talent-list` / `event-list` / `ending-list` / `achievement-list` |
 | `docs/test/` | 测试报告 `test_1.md` ~ `test_7.md`（含 300 局全量测试） |
-| `images/` | 《项目文档》用图：4 张流程图（`01`~`04`）+ 8 张运行截图（`05`~`12`） |
+| `images/` | 《项目文档》用图：5 张流程图（`01`~`04`、`13`）+ 8 张运行截图（`05`~`12`） |
 | `AGENTS.md` / `CHANGELOG.md` | AI 协作准则（九条） / 逐轮更新日志 |
 | `archive/` | 历史文档快照（按日期） |
 
@@ -125,7 +125,7 @@
     ├─ exports/               导出的 txt 记录
     ├─ fonts/  audio/         像素字体 Zpix（OFL）/ 按钮点击音效
     ├─ docs/                  设计文档 01~05 + 《项目文档》 + list/ 清单 + test/ 测试报告
-    ├─ images/                文档用图（4 张流程图 + 8 张运行截图）
+    ├─ images/                文档用图（5 张流程图 + 8 张运行截图）
     ├─ prototype/             早期原型（对照用，不是正式版）
     ├─ archive/               历史文档快照（按日期）
     ├─ dist/  build/  *.spec  打包产物与构建缓存（已在 .gitignore 中）
